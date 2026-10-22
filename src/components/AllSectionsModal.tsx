@@ -31,7 +31,7 @@ export interface SectionItem {
 }
 
 export const ALL_SECTIONS: SectionItem[] = [
-  // 1. Cibaado & Salaad
+  // 1. Salaad & Cibaado (Tiirarka Salaadda, Aadaanka, Qiblada & Soonka/Sakada)
   {
     id: 'salaad',
     title: 'Salaad & Diiwaan',
@@ -58,15 +58,16 @@ export const ALL_SECTIONS: SectionItem[] = [
     color: 'from-cyan-500 to-blue-500',
   },
   {
-    id: 'tasbeeh',
-    title: 'Tasbeex Dijitaal',
-    subtitle: 'Tiro koobka tasbeexda, Sujuud & Dhawaaq',
+    id: 'soon',
+    title: 'Soon, Afur & Sakada 💰',
+    subtitle: 'Soonka Ramadaan, Xisaabiyaha Sakada & Nisaabka Dahabka',
     category: 'cibaado',
-    icon: Flame,
-    color: 'from-amber-500 to-orange-500',
+    icon: Moon,
+    badge: 'Sakada',
+    color: 'from-amber-500 to-yellow-600',
   },
 
-  // 2. Qur'aan & Duco
+  // 2. Qur'aanka, Adhkaarta & Tasbeexda (Kalaamka Alle & Xuska oo is-waafaqsan)
   {
     id: 'quran',
     title: "Qur'aan Kariim",
@@ -84,16 +85,15 @@ export const ALL_SECTIONS: SectionItem[] = [
     color: 'from-cyan-400 to-teal-500',
   },
   {
-    id: 'soon',
-    title: 'Soon, Afur & Sakada 💰',
-    subtitle: 'Soonka Ramadaan, Xisaabiyaha Sakada & Nisaabka Dahabka',
+    id: 'tasbeeh',
+    title: 'Tasbeex Dijitaal',
+    subtitle: 'Tiro koobka tasbeexda, Sujuud & Dhawaaq',
     category: 'quran',
-    icon: Moon,
-    badge: 'Sakada',
-    color: 'from-amber-500 to-yellow-600',
+    icon: Flame,
+    color: 'from-amber-500 to-orange-500',
   },
 
-  // 3. Qorshe & Horumar
+  // 3. Qorsheynta, Kalandarka & Horumarka (Is-waafaqsan)
   {
     id: 'todo',
     title: 'To-Do & Hawlo 📸',
@@ -120,7 +120,7 @@ export const ALL_SECTIONS: SectionItem[] = [
     color: 'from-violet-500 to-fuchsia-500',
   },
 
-  // 4. Dejin & Koonto
+  // 4. Dejinta & Nidaamka
   {
     id: 'settings',
     title: 'Dejinta App-ka',

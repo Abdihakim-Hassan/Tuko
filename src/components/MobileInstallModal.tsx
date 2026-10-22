@@ -174,8 +174,8 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({ isOpen, 
           </div>
         </div>
 
-        {/* Master Category Switcher: 5 Clean Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-teal-500/30 mb-3.5 text-xs font-bold">
+        {/* Master Category Switcher: 3 Clean Tabs */}
+        <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-teal-500/30 mb-3.5 text-xs font-bold">
           {/* Tab 1: Mobile */}
           <button
             onClick={() => setMainCategory('mobile')}
@@ -213,32 +213,6 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({ isOpen, 
           >
             <Laptop className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">PC Desktop 💻</span>
-          </button>
-
-          {/* Tab 4: Saar Online (Cusub) */}
-          <button
-            onClick={() => setMainCategory('online')}
-            className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition cursor-pointer ${
-              mainCategory === 'online'
-                ? 'bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300 text-slate-950 font-black shadow-md shadow-emerald-500/30'
-                : 'text-emerald-300 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Rocket className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-            <span className="truncate">Saar Online 🚀</span>
-          </button>
-
-          {/* Tab 5: Posters */}
-          <button
-            onClick={() => setMainCategory('poster')}
-            className={`py-2 px-1 rounded-xl flex items-center justify-center gap-1 transition cursor-pointer col-span-2 sm:col-span-1 ${
-              mainCategory === 'poster'
-                ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black shadow-md shadow-amber-500/25'
-                : 'text-amber-300 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Posters 🎨</span>
           </button>
         </div>
 

@@ -126,18 +126,33 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isToday = activeDateKey === todayKey;
 
-  const tabs = [
-    { id: 'salaad', label: 'Salaad & Diiwaan', icon: Compass },
-    { id: 'adhan', label: 'Aadaan & Alaarm ⏰', icon: Volume2, badge: 'Cusub' },
-    { id: 'qibla', label: 'Qibla', icon: Navigation },
-    { id: 'tasbeeh', label: 'Tasbeex', icon: Flame },
-    { id: 'todo', label: 'To-Do 📸', icon: CheckSquare },
-    { id: 'adhkaar', label: 'Adhkaar & Duco', icon: Sparkles },
-    { id: 'soon', label: 'Soon & Sakada 💰', icon: Moon },
-    { id: 'quran', label: "Qur'aan", icon: BookOpen },
-    { id: 'calendar', label: 'Kalandar', icon: Calendar },
-    { id: 'stats', label: 'Tirakoob', icon: BarChart3 },
-    { id: 'settings', label: 'Dejin', icon: Settings },
+  const tabs: Array<{
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: string;
+    group: 'salaad' | 'dhikr' | 'soon' | 'qorshe' | 'dejin';
+  }> = [
+    // 1. Tiirka Salaadda, Waqtiga Aadaanka & Jihada Qiblada (Ugu muhiimsan & is-waafaqsan)
+    { id: 'salaad', label: 'Salaad & Diiwaan', icon: Compass, group: 'salaad' },
+    { id: 'adhan', label: 'Aadaan & Alaarm ⏰', icon: Volume2, badge: 'Cusub', group: 'salaad' },
+    { id: 'qibla', label: 'Qibla', icon: Navigation, group: 'salaad' },
+
+    // 2. Kalaamka Alle, Adhkaarta & Tasbeexda (Is-waafaqsan)
+    { id: 'quran', label: "Qur'aan", icon: BookOpen, group: 'dhikr' },
+    { id: 'adhkaar', label: 'Adhkaar & Duco', icon: Sparkles, group: 'dhikr' },
+    { id: 'tasbeeh', label: 'Tasbeex', icon: Flame, group: 'dhikr' },
+
+    // 3. Tiirarka Soonka & Sakada
+    { id: 'soon', label: 'Soon & Sakada 💰', icon: Moon, group: 'soon' },
+
+    // 4. Qorsheynta Maalinta, Kalandarka & Tirakoobka Horumarka (Is-waafaqsan)
+    { id: 'todo', label: 'To-Do 📸', icon: CheckSquare, group: 'qorshe' },
+    { id: 'calendar', label: 'Kalandar', icon: Calendar, group: 'qorshe' },
+    { id: 'stats', label: 'Tirakoob', icon: BarChart3, group: 'qorshe' },
+
+    // 5. Dejinta Guud ee App-ka
+    { id: 'settings', label: 'Dejin', icon: Settings, group: 'dejin' },
   ];
 
   return (
@@ -351,45 +366,61 @@ export const Header: React.FC<HeaderProps> = ({
         className="max-w-6xl mx-auto px-3 sm:px-4 pb-2.5 overflow-x-auto scrollbar-none"
       >
         <nav className="flex items-center gap-1.5 min-w-max p-1 rounded-2xl bg-slate-950/75 border border-teal-500/15">
-          {onOpenAllSectionsModal && (
-            <button
-              type="button"
-              onClick={onOpenAllSectionsModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-teal-500/25 via-emerald-500/20 to-teal-500/25 text-teal-200 border border-teal-400/40 hover:border-teal-300 hover:text-white shadow-sm shrink-0 active:scale-95 cursor-pointer"
-              title="Arag dhammaan qaybaha app-ka"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 text-teal-300 shrink-0" />
-              <span>Qaybaha</span>
-            </button>
-          )}
-
-          {tabs.map((tab) => {
+          {tabs.map((tab, index) => {
             const Icon = tab.icon;
             const isActive = currentTab === tab.id;
+            const prevGroup = index > 0 ? tabs[index - 1].group : tab.group;
+            const showGroupDivider = index > 0 && prevGroup !== tab.group;
+
             return (
-              <button
-                key={tab.id}
-                ref={(el) => {
-                  tabRefs.current[tab.id] = el;
-                }}
-                type="button"
-                onClick={() => onTabChange(tab.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all relative whitespace-nowrap shrink-0 active:scale-95 cursor-pointer ${
-                  isActive
-                    ? 'bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-500 text-slate-950 font-black shadow-md shadow-teal-500/25'
-                    : 'text-slate-300 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-slate-950 stroke-[2.5]' : 'text-teal-400/85'}`} />
-                <span>{tab.label}</span>
-                {tab.badge && !isActive && (
-                  <span className="text-[10px] bg-gradient-to-r from-teal-500/30 to-emerald-500/30 border border-teal-400/30 text-teal-300 px-1.5 py-0.5 rounded-full leading-none">
-                    {tab.badge}
-                  </span>
+              <React.Fragment key={tab.id}>
+                {showGroupDivider && (
+                  <span
+                    className="h-4 w-px bg-teal-500/20 mx-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
                 )}
-              </button>
+                <button
+                  ref={(el) => {
+                    tabRefs.current[tab.id] = el;
+                  }}
+                  type="button"
+                  onClick={() => onTabChange(tab.id)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all relative whitespace-nowrap shrink-0 active:scale-95 cursor-pointer ${
+                    isActive
+                      ? 'bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-500 text-slate-950 font-black shadow-md shadow-teal-500/25'
+                      : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-slate-950 stroke-[2.5]' : 'text-teal-400/85'}`} />
+                  <span>{tab.label}</span>
+                  {tab.badge && !isActive && (
+                    <span className="text-[10px] bg-gradient-to-r from-teal-500/30 to-emerald-500/30 border border-teal-400/30 text-teal-300 px-1.5 py-0.5 rounded-full leading-none">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              </React.Fragment>
             );
           })}
+
+          {onOpenAllSectionsModal && (
+            <>
+              <span
+                className="h-4 w-px bg-teal-500/20 mx-0.5 shrink-0"
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                onClick={onOpenAllSectionsModal}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-teal-500/25 via-emerald-500/20 to-teal-500/25 text-teal-200 border border-teal-400/40 hover:border-teal-300 hover:text-white shadow-sm shrink-0 active:scale-95 cursor-pointer"
+                title="Arag dhammaan qaybaha app-ka"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+                <span>Qaybaha</span>
+              </button>
+            </>
+          )}
         </nav>
       </div>
     </header>
