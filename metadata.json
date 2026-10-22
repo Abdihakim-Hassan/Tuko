@@ -1,0 +1,6 @@
+{
+  "name": "Salaad & Adhkaar Soomaali",
+  "description": "App-ka Casriga ah ee Salaadaha, Dikriga & Adhkaarta Soomaaliya oo leh waqtiyo toos ah, diiwaangelin, iyo xog-kaydin otomaatig ah.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

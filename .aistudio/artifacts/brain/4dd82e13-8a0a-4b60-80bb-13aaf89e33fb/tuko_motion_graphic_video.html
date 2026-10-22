@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tuko - Motion Graphic Video & HD Video Exporter</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #030d0c;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 16px;
+      overflow-x: hidden;
+    }
+    .header-bar {
+      max-width: 900px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 12px 18px;
+      background: rgba(6, 30, 27, 0.8);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #10b981, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 900;
+      color: #030d0c;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #34d399, #5eead4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-download {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #022c22;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    }
+    .btn-download:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+    .btn-download:active {
+      transform: translateY(1px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .btn-secondary.active {
+      background: #10b981;
+      color: #022c22;
+    }
+    
+    /* Stage Viewport */
+    .stage-container {
+      max-width: 900px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .canvas-wrapper {
+      position: relative;
+      background: #020908;
+      border-radius: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(16, 185, 129, 0.15);
+      border: 3px solid rgba(16, 185, 129, 0.3);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+    
+    /* Controls Bar */
+    .controls-panel {
+      max-width: 900px;
+      width: 100%;
+      background: rgba(6, 30, 27, 0.9);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 18px;
+      padding: 14px 18px;
+      margin-top: 14px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .timeline-bar {
+      display: flex;
+      gap: 4px;
+      width: 100%;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 999px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .timeline-seg {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.12);
+      position: relative;
+      border-radius: 999px;
+      overflow: hidden;
+      transition: background 0.2s;
+    }
+    .timeline-seg:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .timeline-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981, #38bdf8);
+      border-radius: 999px;
+    }
+    .playback-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .scene-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .scene-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+    .time-label {
+      font-size: 12px;
+      font-mono: monospace;
+      color: #94a3b8;
+    }
+    .button-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .record-status {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #f43f5e;
+      animation: pulse 1.5s infinite;
+    }
+    .record-status.active {
+      display: flex;
+    }
+    .rec-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f43f5e;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .caption-box {
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 12px;
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .caption-somali {
+      color: #6ee7b7;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .caption-sub {
+      color: #94a3b8;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="header-bar">
+    <div class="brand">
+      <div class="brand-icon">☪</div>
+      <div>
+        <div class="brand-title">TUKO MOTION GRAPHIC VIDEO</div>
+        <div class="brand-sub">Muuqaalka Sharraxaadda Qaybaha App-ka &amp; Soodejinta Video-ga</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <!-- Aspect Ratio Switcher -->
+      <button class="btn btn-secondary active" id="btnModeReel" onclick="setMode('reel')">📱 Reel (9:16)</button>
+      <button class="btn btn-secondary" id="btnModeWide" onclick="setMode('wide')">🖥️ YouTube (16:9)</button>
+      <!-- One-Click Full Video Recorder & Downloader -->
+      <button class="btn btn-download" id="btnExportVideo" onclick="exportVideoFile()">
+        ⬇️ SOO DEGSO VIDEO-GA (MP4 / WEBM)
+      </button>
+    </div>
+  </header>
+
+  <!-- Canvas Stage -->
+  <main class="stage-container">
+    <div class="canvas-wrapper" id="canvasWrapper">
+      <canvas id="motionCanvas" width="720" height="1280"></canvas>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="controls-panel">
+      <!-- Multi-Scene Timeline -->
+      <div class="timeline-bar" id="timelineBar">
+        <div class="timeline-seg" onclick="jumpToScene(0)"><div class="timeline-fill" id="fill0"></div></div>
+        <div class="timeline-seg" onclick="jumpToScene(1)"><div class="timeline-fill" id="fill1"></div></div>
+        <div class="timeline-seg" onclick="jumpToScene(2)"><div class="timeline-fill" id="fill2"></div></div>
+        <div class="timeline-seg" onclick="jumpToScene(3)"><div class="timeline-fill" id="fill3"></div></div>
+        <div class="timeline-seg" onclick="jumpToScene(4)"><div class="timeline-fill" id="fill4"></div></div>
+        <div class="timeline-seg" onclick="jumpToScene(5)"><div class="timeline-fill" id="fill5"></div></div>
+        <div class="timeline-seg" onclick="jumpToScene(6)"><div class="timeline-fill" id="fill6"></div></div>
+      </div>
+
+      <!-- Playback Info & Buttons -->
+      <div class="playback-row">
+        <div class="scene-meta">
+          <span class="badge" id="sceneBadge">QAYBTA 1 / 7</span>
+          <span class="scene-title" id="sceneTitle">Hordhac &amp; Soo Dhawaynta Tuko</span>
+          <span class="time-label" id="timeLabel">0s / 8s</span>
+        </div>
+
+        <!-- Recording Indicator -->
+        <div class="record-status" id="recordStatus">
+          <span class="rec-dot"></span>
+          <span id="recordText">DUUBAYAA VIDEO-GA (0%)...</span>
+        </div>
+
+        <div class="button-group">
+          <button class="btn btn-secondary" onclick="prevScene()" title="Qaybtii hore">⏮️</button>
+          <button class="btn btn-download" id="btnPlayPause" onclick="togglePlay()" title="Daar / Jooji">⏸️ Jooji</button>
+          <button class="btn btn-secondary" onclick="nextScene()" title="Qaybta xigta">⏭️</button>
+          <button class="btn btn-secondary" onclick="restartAll()" title="Dib u bilow">🔄</button>
+          <button class="btn btn-secondary" id="btnAudio" onclick="toggleAudio()" title="Codka">🔊 Codka</button>
+          <button class="btn btn-secondary" id="btnSpeed" onclick="cycleSpeed()" title="Xawaaraha">1x</button>
+        </div>
+      </div>
+
+      <!-- Live Caption Box -->
+      <div class="caption-box">
+        <div class="caption-somali" id="captionSomali">🌟 TUKO: App-ka Casriga ah ee Ilaalinta Salaadaha &amp; Adkaarta</div>
+        <div class="caption-sub" id="captionSub">Kusoo dhawoow Tuko – App-ka Soomaaliyeed ee loogu talagalay ilaalinta shanta salaadood, Qur'aanka, iyo adkaarta!</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Scenes Definition
+    const SCENES = [
+      {
+        id: 1,
+        title: "Hordhac & Soo Dhawaynta Tuko",
+        badge: "BILOWGA",
+        duration: 8,
+        icon: "☪",
+        caption: "🌟 TUKO: App-ka Casriga ah ee Salaadaha, Adkaarta & Qur’aanka",
+        voiceover: "Kusoo dhawoow Tuko – App-ka casriga ah ee Soomaaliyeed ee loogu talagalay ilaalinta shanta salaadood, akhriska Qur'aanka, iyo adkaarta!",
+        bullets: [
+          "Waqtiyada tooska ah ee magaalooyinka Soomaaliya",
+          "Codadka 8 Shiiq oo caan ah oo Aadaanka ku aqriya",
+          "Isku-xirnaan toos ah oo Mobile, Tablet iyo Laptop ah"
+        ]
+      },
+      {
+        id: 2,
+        title: "Diiwaangelinta & Xogta Gaarka ah",
+        badge: "XOGTAADA (0)",
+        duration: 8,
+        icon: "👤",
+        caption: "👤 Xogtaadu waxay ka bilaabanaysaa 0, waana mid 100% gaar kuu ah",
+        voiceover: "Marka aad app-ka soo gasho, waxaad ku samaynaysaa diiwaangelin degdeg ah. Xogtaadu waxay ka bilaabanaysaa eber (0), waxaadna dooranaysaa Wiil ama Gabar!",
+        bullets: [
+          "Qof kasta xogtiisa waa gooni oo qof kale kuma dhex qasanto",
+          "Xulashada Wiil / Gabar oo habaynaysa cibaadadaada",
+          "Xogta oo toos ugu keydsan Cloud Database"
+        ]
+      },
+      {
+        id: 3,
+        title: "5-ta Salaadood & Aadaanka Tooska ah",
+        badge: "SALAADAHA",
+        duration: 9,
+        icon: "🕌",
+        caption: "🕌 Waqtiyada rasmiga ah & Aadaanka nool ee Muqdisho, Hargeysa, Garoowe & kale",
+        voiceover: "Ka eego waqtiyada saxda ah ee Fajr, Duhur, Casar, Maghrib iyo Cishaa. App-ku wuxuu si toos ah kuu siinayaa tirada daqiiqadaha kaaga dhiman salaad kasta!",
+        bullets: [
+          "Xisaabinta tooska ah ee daqiiqadaha salaadda xigta",
+          "Aadaanka oo toos uga dhacaya taleefankaaga",
+          "Xaqiijinta salaadda (Jameeco, Kaligaa ama Qadaa)"
+        ]
+      },
+      {
+        id: 4,
+        title: "Qadaa Tracker & 30-Day Khatm Planner",
+        badge: "QADAA & KHATM",
+        duration: 9,
+        icon: "📿",
+        caption: "📿 Qadaa Tracker: La soco soonka & salaadaha kugu dhaafay oo qalleey",
+        voiceover: "Miyaa salaad ama soon ku dhaafay? Tuko waxay kuu xisaabinaysaa tirada maalmaha soonka ama salaadaha qadaada ah ee kugu waajibay, gaar ahaan gabdhaha bisha Ramadaan kadib!",
+        bullets: [
+          "Xisaabiye (+ / -) soonka Ramadaan iyo salaadaha qadaada",
+          "Jadwalka 30-ka maalmood ee Khatinka Qur’aanka Kariimka",
+          "Inta bog ee aad salaad kasta kadib akhrinayso"
+        ]
+      },
+      {
+        id: 5,
+        title: "Adkaarta, Tasbiixda & Jiheeyaha Qiblada",
+        badge: "DIKRIGA",
+        duration: 8,
+        icon: "🧭",
+        caption: "🧭 Qibla Compass toos ah & Tasbeeh Dijitaal ah oo gariiraya",
+        voiceover: "Akhriso adkaarta subax iyo galab, isticmaal Tasbiixda casriga ah ee gariirka leh, oo soo saar Jiheeyaha Qiblada ee 3D-ga ah!",
+        bullets: [
+          "Adkaarta subax, galab iyo hurdada oo micno wata",
+          "Tasbeeh taabasho leh oo gariiraya 33 ama 100 markaad gaarto",
+          "Jiheeyaha Qiblada ee saxda ah meel kasta oo aad joogto"
+        ]
+      },
+      {
+        id: 6,
+        title: "To-Do List-ka & Alaarm-ka Mobile-ka",
+        badge: "ABAABULKA",
+        duration: 9,
+        icon: "⏰",
+        caption: "⏰ To-Do List & Alaarm Mobile leh 12-Hour AM/PM picker iyo Timer",
+        voiceover: "Qorsheyso hawlahaaga maalinlaha ah adigoo adeegsanaya To-Do List-ka casriga ah. Ku dar saacadda xusuusinta oo daji Alaarm-ka Mobile-ka!",
+        bullets: [
+          "To-Do List leh saacadda hawsha (Due Time ⏰) iyo xusuusin",
+          "Alaarmyo gaar ah oo leh codadka adhaanka iyo digtoonaan",
+          "Countdown Timer toos ah oo taleefanka uga dhacaya"
+        ]
+      },
+      {
+        id: 7,
+        title: "Soo Degsashada & Isku-xirka Qalabka",
+        badge: "PWA INSTALL",
+        duration: 9,
+        icon: "📲",
+        caption: "📲 Toos ugu shubo Android ama iPhone adigoo adeegsanaya 1 Gujis!",
+        voiceover: "Tuko uma baahna Play Store ama lacag bixin! Kaliya ka fur link-ga Google Chrome ama Safari, riix Soo Dagso App-ka, wuxuuna kuugu degayaa taleefankaaga!",
+        bullets: [
+          "Bilaash 100% – wax lacag ah ama xayaysiis kuma jiraan",
+          "Kuma xirna Play Store / App Store – toos ayuu kuugu degayaa",
+          "Xogtu si toos ah ayay isugu waafaqaysaa Mobile & Tablet"
+        ]
+      }
+    ];
+
+    let currentSceneIdx = 0;
+    let sceneTime = 0; // in seconds
+    let isPlaying = true;
+    let speed = 1;
+    let isMuted = false;
+    let currentMode = 'reel'; // 'reel' (9:16) or 'wide' (16:9)
+    let isRecording = false;
+
+    const canvas = document.getElementById('motionCanvas');
+    const ctx = canvas.getContext('2d');
+    const speeds = [1, 1.25, 1.5];
+
+    // Audio synthesizer for subtle transitions
+    let audioCtx = null;
+    function playTone(freq, duration) {
+      if (isMuted) return;
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + duration);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.1, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + duration);
+      } catch (e) {}
+    }
+
+    // Voiceover Speech
+    function speakText(text) {
+      if (isMuted) return;
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = speed;
+        utter.lang = 'so-SO';
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('btnModeReel').classList.toggle('active', mode === 'reel');
+      document.getElementById('btnModeWide').classList.toggle('active', mode === 'wide');
+      if (mode === 'reel') {
+        canvas.width = 720;
+        canvas.height = 1280;
+        document.getElementById('canvasWrapper').style.maxHeight = '720px';
+      } else {
+        canvas.width = 1280;
+        canvas.height = 720;
+        document.getElementById('canvasWrapper').style.maxHeight = '560px';
+      }
+    }
+
+    function updateUI() {
+      const scene = SCENES[currentSceneIdx];
+      document.getElementById('sceneBadge').innerText = `QAYBTA ${scene.id} / ${SCENES.length}`;
+      document.getElementById('sceneTitle').innerText = scene.title;
+      document.getElementById('timeLabel').innerText = `${Math.floor(sceneTime)}s / ${scene.duration}s`;
+      document.getElementById('captionSomali').innerText = scene.caption;
+      document.getElementById('captionSub').innerText = scene.voiceover;
+
+      // Update timeline segments
+      for (let i = 0; i < SCENES.length; i++) {
+        const fill = document.getElementById(`fill${i}`);
+        if (i < currentSceneIdx) {
+          fill.style.width = '100%';
+        } else if (i === currentSceneIdx) {
+          fill.style.width = `${(sceneTime / scene.duration) * 100}%`;
+        } else {
+          fill.style.width = '0%';
+        }
+      }
+    }
+
+    // Drawing Animation Engine
+    function renderFrame() {
+      const W = canvas.width;
+      const H = canvas.height;
+      const scene = SCENES[currentSceneIdx];
+      const progress = sceneTime / scene.duration;
+      const t = Date.now() / 1000;
+
+      // 1. Background Gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+      bgGrad.addColorStop(0, '#021815');
+      bgGrad.addColorStop(0.5, '#04221d');
+      bgGrad.addColorStop(1, '#010c0a');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      // 2. Animated Islamic Geometric Accent Rings
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(t * 0.1);
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)';
+      ctx.lineWidth = 2;
+      for (let r = 80; r < Math.max(W, H); r += 90) {
+        ctx.beginPath();
+        ctx.arc(0, 0, r + Math.sin(t + r) * 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // 3. Top Banner / Header in Canvas
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+      ctx.fillRect(0, 0, W, currentMode === 'reel' ? 120 : 90);
+
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold ' + (currentMode === 'reel' ? '28px' : '24px') + ' -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText("☪ TUKO APP — HAGAHA MUUQAALKA", W / 2, currentMode === 'reel' ? 60 : 45);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '500 ' + (currentMode === 'reel' ? '18px' : '15px') + ' -apple-system, sans-serif';
+      ctx.fillText(`QAYBTA ${scene.id} ee ${SCENES.length}: ${scene.title.toUpperCase()}`, W / 2, currentMode === 'reel' ? 95 : 72);
+
+      // 4. Central Visual Showcase Mockup Container
+      const padX = currentMode === 'reel' ? 40 : 180;
+      const cardY = currentMode === 'reel' ? 150 : 110;
+      const cardW = W - padX * 2;
+      const cardH = currentMode === 'reel' ? H - 380 : H - 240;
+
+      // Card Background
+      ctx.save();
+      ctx.fillStyle = 'rgba(6, 38, 33, 0.85)';
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.4)';
+      ctx.lineWidth = 3;
+      roundRect(ctx, padX, cardY, cardW, cardH, 24);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Big Glowing Icon with Breathing Pulse
+      const iconPulse = 1 + Math.sin(t * 3) * 0.06;
+      ctx.save();
+      ctx.translate(W / 2, cardY + (currentMode === 'reel' ? 110 : 80));
+      ctx.scale(iconPulse, iconPulse);
+      ctx.font = (currentMode === 'reel' ? '70px' : '60px') + ' sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(scene.icon, 0, 0);
+      ctx.restore();
+
+      // Title & Badge Inside Card
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '900 ' + (currentMode === 'reel' ? '36px' : '32px') + ' -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(scene.title, W / 2, cardY + (currentMode === 'reel' ? 200 : 155));
+
+      // Animated Key Points / Bullets
+      const bulletStartY = cardY + (currentMode === 'reel' ? 270 : 210);
+      const bulletGap = currentMode === 'reel' ? 70 : 55;
+      scene.bullets.forEach((bullet, bIdx) => {
+        const bulletProgress = Math.min(1, Math.max(0, (progress * scene.duration - bIdx * 1.5) / 1));
+        if (bulletProgress > 0) {
+          ctx.save();
+          const alpha = bulletProgress;
+          const slideX = (1 - bulletProgress) * 40;
+          ctx.globalAlpha = alpha;
+
+          // Bullet Pill Container
+          const bx = padX + 30 + slideX;
+          const by = bulletStartY + bIdx * bulletGap;
+          const bw = cardW - 60;
+          const bh = currentMode === 'reel' ? 52 : 44;
+
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.3)';
+          ctx.lineWidth = 1.5;
+          roundRect(ctx, bx, by, bw, bh, 12);
+          ctx.fill();
+          ctx.stroke();
+
+          // Checkmark Icon
+          ctx.fillStyle = '#34d399';
+          ctx.font = 'bold ' + (currentMode === 'reel' ? '20px' : '18px') + ' -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText("✓", bx + 16, by + bh / 2 + 6);
+
+          // Bullet Text
+          ctx.fillStyle = '#f1f5f9';
+          ctx.font = '600 ' + (currentMode === 'reel' ? '18px' : '16px') + ' -apple-system, sans-serif';
+          ctx.fillText(bullet, bx + 44, by + bh / 2 + 6);
+
+          ctx.restore();
+        }
+      });
+
+      // 5. Bottom Subtitle / Voiceover Card
+      const subY = H - (currentMode === 'reel' ? 190 : 110);
+      const subH = currentMode === 'reel' ? 160 : 90;
+      ctx.fillStyle = 'rgba(2, 20, 17, 0.95)';
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.5)';
+      ctx.lineWidth = 2;
+      roundRect(ctx, 30, subY, W - 60, subH, 18);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold ' + (currentMode === 'reel' ? '18px' : '15px') + ' -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(scene.caption, W / 2, subY + (currentMode === 'reel' ? 38 : 30));
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '500 ' + (currentMode === 'reel' ? '15px' : '13px') + ' -apple-system, sans-serif';
+      wrapText(ctx, scene.voiceover, W / 2, subY + (currentMode === 'reel' ? 74 : 58), W - 120, currentMode === 'reel' ? 24 : 18);
+    }
+
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      let curY = y;
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, x, curY);
+          line = words[n] + ' ';
+          curY += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, x, curY);
+    }
+
+    // Main Animation Loop
+    let lastTime = performance.now();
+    function animate(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (isPlaying) {
+        sceneTime += dt * speed;
+        const scene = SCENES[currentSceneIdx];
+        if (sceneTime >= scene.duration) {
+          if (currentSceneIdx < SCENES.length - 1) {
+            currentSceneIdx++;
+            sceneTime = 0;
+            playTone(660, 0.2);
+            speakText(SCENES[currentSceneIdx].voiceover);
+          } else {
+            // Finished all scenes
+            if (!isRecording) {
+              currentSceneIdx = 0;
+              sceneTime = 0;
+            } else {
+              isPlaying = false;
+            }
+          }
+        }
+      }
+
+      renderFrame();
+      updateUI();
+      requestAnimationFrame(animate);
+    }
+
+    // Playback Controls
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      document.getElementById('btnPlayPause').innerText = isPlaying ? "⏸️ Jooji" : "▶️ Daar";
+      if (isPlaying) {
+        speakText(SCENES[currentSceneIdx].voiceover);
+      } else {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      }
+    }
+
+    function prevScene() {
+      if (currentSceneIdx > 0) {
+        currentSceneIdx--;
+        sceneTime = 0;
+        playTone(520, 0.15);
+        speakText(SCENES[currentSceneIdx].voiceover);
+      }
+    }
+
+    function nextScene() {
+      if (currentSceneIdx < SCENES.length - 1) {
+        currentSceneIdx++;
+        sceneTime = 0;
+        playTone(660, 0.15);
+        speakText(SCENES[currentSceneIdx].voiceover);
+      }
+    }
+
+    function jumpToScene(idx) {
+      currentSceneIdx = idx;
+      sceneTime = 0;
+      playTone(580, 0.15);
+      speakText(SCENES[idx].voiceover);
+    }
+
+    function restartAll() {
+      currentSceneIdx = 0;
+      sceneTime = 0;
+      isPlaying = true;
+      document.getElementById('btnPlayPause').innerText = "⏸️ Jooji";
+      playTone(720, 0.25);
+      speakText(SCENES[0].voiceover);
+    }
+
+    function toggleAudio() {
+      isMuted = !isMuted;
+      document.getElementById('btnAudio').innerText = isMuted ? "🔇 Xiran" : "🔊 Furan";
+      if (isMuted && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function cycleSpeed() {
+      const idx = (speeds.indexOf(speed) + 1) % speeds.length;
+      speed = speeds[idx];
+      document.getElementById('btnSpeed').innerText = `${speed}x`;
+    }
+
+    // Export Real Video File via MediaRecorder
+    async function exportVideoFile() {
+      if (isRecording) return;
+      isRecording = true;
+
+      const recordStatus = document.getElementById('recordStatus');
+      const recordText = document.getElementById('recordText');
+      const exportBtn = document.getElementById('btnExportVideo');
+
+      recordStatus.classList.add('active');
+      exportBtn.disabled = true;
+      exportBtn.innerText = "⏳ DUUBAYAA...";
+
+      // Reset to beginning
+      currentSceneIdx = 0;
+      sceneTime = 0;
+      isPlaying = true;
+      speed = 1.25; // export a bit faster for fast download
+
+      // Check stream support
+      const stream = canvas.captureStream(30);
+      let mimeType = 'video/webm;codecs=vp9';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp8';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'video/webm';
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        videoBitsPerSecond: 4000000
+      });
+
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Tuko_App_Motion_Graphic_Video_${currentMode === 'reel' ? '9x16_Reel' : '16x9_HD'}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 20000);
+
+        isRecording = false;
+        recordStatus.classList.remove('active');
+        exportBtn.disabled = false;
+        exportBtn.innerText = "⬇️ SOO DEGSO VIDEO-GA (MP4 / WEBM)";
+        speed = 1;
+        alert("✅ Video-gaaga waa la duubay oo si toos ah ayuu ugu degay taleefankaaga ama kombiyuutarkaaga!");
+      };
+
+      recorder.start();
+
+      // Total duration tracking
+      const totalDuration = SCENES.reduce((acc, s) => acc + s.duration, 0);
+
+      const checkInterval = setInterval(() => {
+        let elapsed = 0;
+        for (let i = 0; i < currentSceneIdx; i++) elapsed += SCENES[i].duration;
+        elapsed += sceneTime;
+        const pct = Math.min(100, Math.round((elapsed / totalDuration) * 100));
+        recordText.innerText = `DUUBAYAA VIDEO-GA (${pct}%)...`;
+
+        if (currentSceneIdx === SCENES.length - 1 && sceneTime >= SCENES[currentSceneIdx].duration - 0.2) {
+          clearInterval(checkInterval);
+          setTimeout(() => {
+            recorder.stop();
+          }, 300);
+        }
+      }, 200);
+    }
+
+    // Start playback
+    requestAnimationFrame(animate);
+    setTimeout(() => {
+      speakText(SCENES[0].voiceover);
+    }, 600);
+  </script>
+</body>
+</html>

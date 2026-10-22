@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string" },
+        "goal": { "type": "string" },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "DayRecord": {
+      "title": "DayRecord",
+      "description": "Daily record of prayers, adhkar, and quran reading",
+      "type": "object",
+      "properties": {
+        "dateKey": { "type": "string" },
+        "userId": { "type": "string" },
+        "salaah": { "type": "object" },
+        "adhkar": { "type": "object" },
+        "customDuasCompleted": { "type": "object" },
+        "quran": { "type": "number" },
+        "quranSurahs": { "type": "array" },
+        "isExcusedDay": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["dateKey", "userId", "quran"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User application settings",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "cityId": { "type": "string" },
+        "cityName": { "type": "string" },
+        "lat": { "type": "number" },
+        "lon": { "type": "number" },
+        "method": { "type": "string" },
+        "asrMethod": { "type": "number" },
+        "adhanSound": { "type": "boolean" },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "haptic": { "type": "boolean" },
+        "ramadanMode": { "type": "boolean" },
+        "qadaaTracker": { "type": "object" },
+        "khatmPlan": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "cityName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/days/{dateKey}": {
+      "schema": "DayRecord",
+      "description": "Daily prayer, adhkar, and quran records for a user"
+    },
+    "/users/{userId}/settings/current": {
+      "schema": "UserSettings",
+      "description": "User settings document"
+    }
+  }
+}

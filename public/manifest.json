@@ -1,0 +1,75 @@
+{
+  "id": "/",
+  "name": "Tuko",
+  "short_name": "Tuko",
+  "description": "App-ka Casriga ah ee Ilaalinta Salaadaha, Dikriga & Qur'aanka Soomaaliya oo leh waqtiyo toos ah, diiwaangelin, iyo xog-kaydin cloud ah.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#03221e",
+  "theme_color": "#03221e",
+  "categories": [
+    "lifestyle",
+    "utilities",
+    "productivity"
+  ],
+  "lang": "so",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Salaadaha & Waqtiyada",
+      "short_name": "Salaad",
+      "description": "Arag shanta salaadood iyo waqtiyada adhaanka",
+      "url": "/?tab=salaad",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Adkaarta Subaxa & Galabta",
+      "short_name": "Adkaar",
+      "description": "Akhri adkaarta maalinlaha ah",
+      "url": "/?tab=adkaarta",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Tasbeex Digitaal",
+      "short_name": "Tasbeex",
+      "description": "Tiriyaha tasbeexda iyo dikriga",
+      "url": "/?tab=tasbeex",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Jiheeyaha Qiblada",
+      "short_name": "Qibla",
+      "description": "Hel jihooyinka saxda ah ee Kacbada",
+      "url": "/?tab=qibla",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

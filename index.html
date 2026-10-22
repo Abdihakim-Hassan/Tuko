@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="so">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Tuko</title>
+    <meta name="description" content="Tuko – App-ka Casriga ah ee Ilaalinta Salaadaha, Dikriga &amp; Qur'aanka Soomaaliya oo leh waqtiyo toos ah, diiwaangelin, iyo xog-kaydin cloud ah." />
+    <meta property="og:title" content="Tuko" />
+    <meta property="og:description" content="Tuko – App-ka Casriga ah ee Ilaalinta Salaadaha, Dikriga &amp; Qur'aanka Soomaaliya oo leh waqtiyo toos ah, diiwaangelin, iyo xog-kaydin cloud ah." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#03221e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Tuko" />
+    <meta name="application-name" content="Tuko" />
+    <style>
+      :root {
+        --app-bg: #03221e;
+        color-scheme: dark;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      html {
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: #03221e !important;
+        width: 100% !important;
+        height: 100% !important;
+        overflow-x: hidden !important;
+        -webkit-text-size-adjust: 100%;
+        color-scheme: dark;
+      }
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: #03221e !important;
+        color: #f8fafc !important;
+        width: 100% !important;
+        min-height: 100% !important;
+        min-height: 100dvh !important;
+        overflow-x: hidden !important;
+        -webkit-font-smoothing: antialiased;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        min-height: 100% !important;
+        min-height: 100dvh !important;
+        background-color: #03221e !important;
+      }
+      #tuko-initial-splash {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        margin: 0 !important;
+        padding: 24px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background-color: #03221e !important;
+        color: #f8fafc !important;
+        z-index: 99999 !important;
+      }
+      @keyframes tukoSpin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes tukoPulseRing {
+        0%, 100% { transform: scale(1); opacity: 0.55; }
+        50% { transform: scale(1.12); opacity: 0.9; }
+      }
+      .tuko-logo-spinner {
+        animation: tukoSpin 1.15s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+        transform-origin: center center;
+      }
+      .tuko-ring-spinner {
+        animation: tukoSpin 1.8s linear infinite reverse;
+        transform-origin: center center;
+      }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="shortcut icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      // Capture early beforeinstallprompt event so it is never missed by React
+      window.__tukoDeferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__tukoDeferredPrompt = e;
+        window.dispatchEvent(new CustomEvent('tuko-prompt-ready'));
+      });
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  </head>
+  <body class="bg-[#03221e] text-slate-100 antialiased selection:bg-teal-500/30 selection:text-teal-200 min-h-screen">
+    <div id="root">
+      <div id="tuko-initial-splash" aria-label="Tuko Reloading">
+        <div style="position: relative; width: 108px; height: 108px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px;">
+          <!-- Outer counter-rotating golden ring -->
+          <svg class="tuko-ring-spinner" viewBox="0 0 120 120" style="position: absolute; inset: -6px; width: 120px; height: 120px;">
+            <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(45, 212, 191, 0.18)" stroke-width="3" />
+            <circle cx="60" cy="60" r="54" fill="none" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="90 250" />
+          </svg>
+          <!-- Spinning Tuko App Logo -->
+          <svg class="tuko-logo-spinner" viewBox="0 0 100 100" style="width: 84px; height: 84px; filter: drop-shadow(0 8px 20px rgba(0,0,0,0.45));" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="splashBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#042f2e" />
+                <stop offset="50%" stop-color="#0f766e" />
+                <stop offset="100%" stop-color="#064e3b" />
+              </linearGradient>
+              <linearGradient id="splashGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#fef08a" />
+                <stop offset="45%" stop-color="#f59e0b" />
+                <stop offset="100%" stop-color="#d97706" />
+              </linearGradient>
+            </defs>
+            <rect x="3" y="3" width="94" height="94" rx="26" fill="url(#splashBgGrad)" stroke="url(#splashGoldGrad)" stroke-width="3" />
+            <circle cx="50" cy="52" r="32" fill="#14b8a6" fill-opacity="0.14" />
+            <path d="M 58 22 C 40 22 28 35 28 52 C 28 68 41 80 58 80 C 65 80 72 77 77 72 C 60 74 46 62 46 50 C 46 38 58 27 75 29 C 70 24 64 22 58 22 Z" fill="url(#splashGoldGrad)" />
+            <path d="M 42 76 L 42 56 C 42 46 50 38 58 38 C 66 38 74 46 74 56 L 74 76 Z" fill="#ffffff" fill-opacity="0.95" />
+            <path d="M 47 76 L 47 60 C 47 52 52 46 58 46 C 64 46 69 52 69 60 L 69 76 Z" fill="#083344" />
+            <circle cx="58" cy="32" r="3.5" fill="url(#splashGoldGrad)" />
+            <path d="M 58 24 L 58 28 M 58 36 L 58 40 M 52 32 L 48 32 M 64 32 L 68 32" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" />
+            <circle cx="34" cy="74" r="2.2" fill="#2dd4bf" />
+            <circle cx="28" cy="67" r="2" fill="#2dd4bf" fill-opacity="0.8" />
+            <circle cx="25" cy="58" r="1.8" fill="#2dd4bf" fill-opacity="0.6" />
+          </svg>
+        </div>
+        <div style="font-family: system-ui, -apple-system, sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.02em; color: #5eead4; margin-bottom: 4px;">
+          Tuko – Dhawr-Salaad &amp; Adkaar
+        </div>
+        <div style="font-family: system-ui, -apple-system, sans-serif; font-weight: 600; font-size: 12px; color: #fcd34d;">
+          Waa la soo cusboonaysiinayaa...
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@theme {
+  --breakpoint-xs: 360px;
+}
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* React Native Fluid Scaling Engine:
+     Automatically scales root rem unit proportionally to device viewport width
+     so all Tailwind spacing, typography, cards, and buttons fit every screen cleanly. */
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    height: auto;
+    min-height: 100%;
+    overflow-x: clip;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  @media (max-width: 359px) {
+    html {
+      font-size: 14px;
+    }
+  }
+
+  @media (min-width: 360px) and (max-width: 390px) {
+    html {
+      font-size: 15px;
+    }
+  }
+
+  @media (min-width: 391px) and (max-width: 480px) {
+    html {
+      font-size: 15.5px;
+    }
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #03221e;
+    color: #f8fafc;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: clip;
+    overflow-y: visible;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    touch-action: pan-y pan-x pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #root, .rn-safe-area-root, .rn-scroll-view {
+    margin: 0;
+    padding: 0;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 100vw;
+    background-color: #03221e;
+    overflow-x: clip;
+    overflow-y: visible;
+    touch-action: pan-y pan-x pinch-zoom;
+  }
+
+  button, a, input, select, textarea {
+    touch-action: pan-y manipulation;
+  }
+
+  /* Prevent iOS Safari auto-zoom on input focus while keeping crisp typography */
+  @media (max-width: 767px) {
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    input[type="tel"],
+    input[type="search"],
+    select,
+    textarea {
+      font-size: max(16px, 1rem);
+    }
+  }
+}
+
+.font-arabic {
+  font-family: 'Amiri', serif;
+}
+
+.font-serif-display {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* Hide scrollbars on horizontal pill/tab scrollers while preserving native touch inertia */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding for modern iOS & Android viewports */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0.5rem), 0.5rem);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Smooth, easy-to-grab vertical & horizontal scrollbar across Laptop, Tablet, and Mobile */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(5, 20, 25, 0.65);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.38);
+  border-radius: 9999px;
+  border: 1px solid rgba(20, 184, 166, 0.2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 212, 191, 0.7);
+}
+::-webkit-scrollbar-thumb:active {
+  background: rgba(16, 185, 129, 0.9);
+}
+
