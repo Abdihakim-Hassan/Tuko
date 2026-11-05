@@ -4,7 +4,6 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
-  ShieldCheck,
   Cloud,
   CheckCircle2,
   AlertCircle,
@@ -14,20 +13,21 @@ import {
   UserPlus,
   Crown,
   HeartHandshake,
-  Check,
   Compass,
   BookOpen,
   Moon,
+  KeyRound,
+  Send,
+  ArrowLeft,
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import {
   signInWithGoogle,
-  signInWithFacebook,
-  signInWithTwitter,
   signUpWithEmail,
   signInWithEmail,
   logOut,
   updateUserProfile,
+  resetPassword,
 } from '../utils/firebase';
 import { AppUserProfile, UserRole, UserGoal } from '../types';
 import { TukoLogo } from './TukoLogo';
@@ -52,6 +52,49 @@ interface AuthModalProps {
   onSkipFirstVisit?: () => void;
 }
 
+function formatAuthError(err: unknown): string {
+  const errStr = err instanceof Error ? err.message : String(err);
+  const code = (err as { code?: string })?.code || '';
+
+  if (code === 'auth/email-already-in-use' || errStr.includes('email-already-in-use')) {
+    return 'Email-kan hore ayaa loo isticmaalay. Fadlan dooro "Gal Koontada (Log In)" ama dib u deji furahaaga sirta ah.';
+  }
+  if (code === 'auth/invalid-email' || errStr.includes('invalid-email')) {
+    return 'Email-ka aad gelisay ma ahan mid sax ah. Fadlan dib u hubi qoraalka email-kaaga.';
+  }
+  if (code === 'auth/weak-password' || errStr.includes('weak-password')) {
+    return 'Furaha sirta ah aad buu u liitaa. Fadlan geli ugu yaraan 6 xaraf oo isugu jira xarfo iyo lambarro.';
+  }
+  if (code === 'auth/user-not-found' || errStr.includes('user-not-found')) {
+    return 'Lama helin koonto email-kan leh. Fadlan dooro "Isku Diiwaangeli (Sign Up)".';
+  }
+  if (code === 'auth/wrong-password' || errStr.includes('wrong-password')) {
+    return 'Furaha sirta ah ma saxna. Fadlan dib u hubi ama riix "Ma ilaawday Furaha Sirta ah?".';
+  }
+  if (code === 'auth/invalid-credential' || errStr.includes('invalid-credential')) {
+    return 'Email-ka ama furaha sirta ah ma saxna. Fadlan dib u hubi xogtaada.';
+  }
+  if (code === 'auth/popup-closed-by-user' || errStr.includes('popup-closed-by-user')) {
+    return 'Daaqaddii gelitaanka Google waa la xiray ka hor inta aan la dhammaystirin.';
+  }
+  if (code === 'auth/popup-blocked' || errStr.includes('popup-blocked')) {
+    return 'Biraawsarkaagu wuxuu xannibay daaqadda (Popup). Fadlan oggolow popups-ka oo dib u riix.';
+  }
+  if (
+    code === 'auth/account-exists-with-different-credential' ||
+    errStr.includes('account-exists-with-different-credential')
+  ) {
+    return 'Cinwaankan hore ayaa loogu galay hab kale (sida Google ama Email). Fadlan ku gal habkaas hore.';
+  }
+  if (code === 'auth/too-many-requests' || errStr.includes('too-many-requests')) {
+    return 'Isku-dayo badan oo is xigxiga ayaa dhacay. Fadlan dhowr daqiiqo sug ka hor intaadan dib u isku dayin.';
+  }
+  if (code === 'auth/network-request-failed' || errStr.includes('network-request-failed')) {
+    return 'Cillad internet ayaa dhacday. Fadlan hubi khadkaaga internet-ka oo isku day markale.';
+  }
+  return `Khalad ayaa dhacay: ${errStr.slice(0, 110)}. Fadlan dib u isku day.`;
+}
+
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -66,19 +109,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isFirstVisitPrompt = false,
   onSkipFirstVisit,
 }) => {
-  const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup');
+  // Mode: 'login' | 'signup'
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+
+  // Forgot password state
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
+  const [resetSentSuccess, setResetSentSuccess] = useState(false);
+
+  // Loading states
   const [loading, setLoading] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Sign up & Login form fields
+  // Email form fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedGoal, setSelectedGoal] = useState<UserGoal>('dhawre_masaajid');
-  const [selectedGender, setSelectedGender] = useState<'male' | 'female' | null>(null);
-  const [awaitingGenderStep, setAwaitingGenderStep] = useState(false);
+  const [selectedGender, setSelectedGender] = useState<'male' | 'female'>(() => currentGender || 'male');
 
   const modalScrollRef = useRef<HTMLDivElement>(null);
   const errorBannerRef = useRef<HTMLDivElement>(null);
@@ -90,87 +141,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // When error message appears, immediately and smoothly scroll user directly to the top error banner
   useEffect(() => {
     if (errorMessage && modalScrollRef.current) {
       modalScrollRef.current.scrollTop = 0;
       modalScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-      const t1 = setTimeout(() => {
-        if (modalScrollRef.current) {
-          modalScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }, 50);
-      const t2 = setTimeout(() => {
-        if (modalScrollRef.current) {
-          modalScrollRef.current.scrollTop = 0;
-        }
-      }, 150);
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-      };
     }
   }, [errorMessage]);
 
   if (!isOpen) return null;
 
-  const executeEmailSignUp = async (genderChoice: 'male' | 'female') => {
+  // 1. Email Sign Up Handler
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setErrorMessage('Fadlan geli email-kaaga iyo furahaaga sirta ah.');
+      scrollToTop();
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMessage('Furaha sirta ah waa inuu ugu yaraan ka koobnaadaa 6 xaraf.');
+      scrollToTop();
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
-    setAwaitingGenderStep(false);
     try {
-      const user = await signUpWithEmail(email, password, fullName, selectedGoal, genderChoice);
-      onLoginSuccess(user, undefined, genderChoice, true);
-      const genderLabel = genderChoice === 'female' ? 'Qaybta Gabdhaha 🌸' : 'Qaybta Wiilasha 🕌';
+      const user = await signUpWithEmail(email.trim(), password, fullName.trim(), selectedGoal, selectedGender);
+      onLoginSuccess(user, undefined, selectedGender, true);
+      const genderLabel = selectedGender === 'female' ? 'Qaybta Gabdhaha 🌸' : 'Qaybta Wiilasha 🕌';
       setSuccessMessage(
-        `Si guul leh ayaad u samaysatay koonto cusub (${genderLabel}) oo 0 ka bilaabanaysa, ${fullName || 'Cibaadeyste'}!`
+        `Si guul leh ayaad u samaysatay koonto cusub (${genderLabel}), ${fullName || 'Cibaadeyste'}!`
       );
       setTimeout(() => {
         setSuccessMessage(null);
         onClose();
       }, 2000);
     } catch (err: unknown) {
-      const errStr = err instanceof Error ? err.message : String(err);
-      console.error('Sign Up Error:', errStr);
-      if (errStr.includes('email-already-in-use')) {
-        setErrorMessage('Email-kan hore ayaa loo isticmaalay. Fadlan koontadaada gal (Login).');
-      } else if (errStr.includes('invalid-email')) {
-        setErrorMessage('Email-ka aad gelisay ma ahan mid sax ah.');
-      } else if (errStr.includes('weak-password')) {
-        setErrorMessage('Furaha sirta ah aad buu u liitaa. Geli furaha sirta ah oo xooggan.');
-      } else {
-        setErrorMessage('Khalad ayaa dhacay xilligii diiwaangelinta. Fadlan hubi xogtaada.');
-      }
+      console.error('Sign Up Error:', err);
+      setErrorMessage(formatAuthError(err));
       scrollToTop();
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Email & Password Sign Up
-  const handleEmailSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password) {
-      setErrorMessage('Fadlan geli email-kaaga iyo furahaaga sirta ah.');
-      return;
-    }
-    if (password.length < 6) {
-      setErrorMessage('Furaha sirta ah waa inuu ugu yaraan ka koobnaadaa 6 xaraf.');
-      return;
-    }
-
-    // If user hasn't picked Wiil or Gabar yet, ask them explicitly right now before completing registration!
-    if (!selectedGender) {
-      setErrorMessage(null);
-      setAwaitingGenderStep(true);
-      scrollToTop();
-      return;
-    }
-
-    await executeEmailSignUp(selectedGender);
-  };
-
-  // Handle Email & Password Login
+  // 2. Email Login Handler
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
@@ -182,7 +198,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMessage(null);
     try {
-      const user = await signInWithEmail(email, password);
+      const user = await signInWithEmail(email.trim(), password);
       onLoginSuccess(user);
       setSuccessMessage(`Ku soo dhowow, ${user.displayName || 'Cibaadeyste'}! Xogtaadii waa la soo celiyay.`);
       setTimeout(() => {
@@ -190,108 +206,67 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onClose();
       }, 2000);
     } catch (err: unknown) {
-      const errStr = err instanceof Error ? err.message : String(err);
-      console.error('Login Error:', errStr);
-      if (errStr.includes('user-not-found') || errStr.includes('wrong-password') || errStr.includes('invalid-credential')) {
-        setErrorMessage('Email-ka ama furaha sirta ah ma saxna. Fadlan dib u hubi.');
-      } else {
-        setErrorMessage('Khalad ayaa dhacay xilligii gelitaanka. Fadlan dib u isku day.');
-      }
+      console.error('Login Error:', err);
+      setErrorMessage(formatAuthError(err));
       scrollToTop();
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Google Login
+  // 3. Password Reset Handler (Email-based)
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmail = forgotPasswordEmail.trim() || email.trim();
+    if (!targetEmail) {
+      setErrorMessage('Fadlan geli email-ka aad ku diiwaangashan tahay.');
+      scrollToTop();
+      return;
+    }
+
+    setIsSendingReset(true);
+    setErrorMessage(null);
+    try {
+      await resetPassword(targetEmail);
+      setResetSentSuccess(true);
+      setSuccessMessage(`✅ Link-ga dib-u-dejinta furaha sirta ah waxaa loo diray ${targetEmail}. Fadlan hubi sanduuqaaga (Inbox / Spam).`);
+    } catch (err) {
+      console.error('Password Reset Error:', err);
+      setErrorMessage(formatAuthError(err));
+      scrollToTop();
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  // 4. Google 1-Click Login Handler
   const handleGoogleLogin = async () => {
     if (loadingProvider) return;
     setLoadingProvider('google');
     setErrorMessage(null);
     try {
-      const user = await signInWithGoogle();
-      onLoginSuccess(user);
-      setSuccessMessage(`Ku soo dhowow, ${user.displayName || 'Cibaadeyste'}!`);
+      const { user, isNewUser } = await signInWithGoogle(fullName.trim() || undefined, selectedGender, selectedGoal);
+      onLoginSuccess(user, undefined, selectedGender, isNewUser);
+      const genderLabel = selectedGender === 'female' ? 'Qaybta Gabdhaha 🌸' : 'Qaybta Wiilasha 🕌';
+      setSuccessMessage(`Ku soo dhowow, ${user.displayName || 'Isticmaale Google'}! (${genderLabel})`);
       setTimeout(() => {
         setSuccessMessage(null);
         onClose();
-      }, 2000);
+      }, 1500);
     } catch (err: unknown) {
       const errStr = err instanceof Error ? err.message : String(err);
-      if (errStr.includes('cancelled-popup-request')) {
-        // Harmless: user clicked again while popup was opening or browser superseded popup
+      if (errStr.includes('popup-closed-by-user') || errStr.includes('cancelled-popup-request')) {
         return;
       }
-      if (errStr.includes('popup-closed-by-user')) {
-        setErrorMessage('Waxaad xidhay daaqadda gelitaanka Google.');
-      } else {
-        setErrorMessage('Khalad ayaa dhacay xilligii Google lagu gelayay. Fadlan isku day markale.');
-      }
+      console.error('Google Login Error:', err);
+      setErrorMessage(formatAuthError(err));
       scrollToTop();
     } finally {
       setLoadingProvider(null);
     }
   };
 
-  // Handle Facebook Login
-  const handleFacebookLogin = async () => {
-    if (loadingProvider) return;
-    setLoadingProvider('facebook');
-    setErrorMessage(null);
-    try {
-      const user = await signInWithFacebook();
-      onLoginSuccess(user);
-      setSuccessMessage(`Ku soo dhowow, ${user.displayName || 'Cibaadeyste'}!`);
-      setTimeout(() => {
-        setSuccessMessage(null);
-        onClose();
-      }, 2000);
-    } catch (err: unknown) {
-      const errStr = err instanceof Error ? err.message : String(err);
-      if (errStr.includes('popup-closed-by-user')) {
-        setErrorMessage('Daaqaddii Facebook waa la xidhay.');
-      } else {
-        // Covers auth/operation-not-allowed and other provider restrictions
-        setErrorMessage(
-          'Gelitaanka Facebook wuxuu u baahan yahay fasax. Fadlan isticmaal Google ama Email.'
-        );
-      }
-      scrollToTop();
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
-
-  // Handle Twitter / X Login
-  const handleTwitterLogin = async () => {
-    if (loadingProvider) return;
-    setLoadingProvider('x');
-    setErrorMessage(null);
-    try {
-      const user = await signInWithTwitter();
-      onLoginSuccess(user);
-      setSuccessMessage(`Ku soo dhowow X, ${user.displayName || 'Cibaadeyste'}!`);
-      setTimeout(() => {
-        setSuccessMessage(null);
-        onClose();
-      }, 2000);
-    } catch (err: unknown) {
-      const errStr = err instanceof Error ? err.message : String(err);
-      if (errStr.includes('popup-closed-by-user')) {
-        setErrorMessage('Daaqaddii X / Twitter waa la xidhay.');
-      } else {
-        // Covers auth/operation-not-allowed and other provider restrictions
-        setErrorMessage(
-          'Gelitaanka X (Twitter) wuxuu u baahan yahay fasax. Fadlan isticmaal Google ama Email.'
-        );
-      }
-      scrollToTop();
-    } finally {
-      setLoadingProvider(null);
-    }
-  };
-
-  // Handle Sign Out
+  // 5. Handle Sign Out
   const handleSignOut = async () => {
     try {
       onClose();
@@ -302,7 +277,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Handle Goal Change when logged in
+  // 6. Handle Goal Change when logged in
   const handleChangeGoal = async (newGoal: UserGoal) => {
     if (!currentUser) return;
     try {
@@ -341,7 +316,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition"
+          className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition cursor-pointer"
           aria-label="Xir"
         >
           <X className="w-4 h-4" />
@@ -349,7 +324,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Modal Header */}
         <div className="flex items-center gap-3 mb-4">
-          <TukoLogo className="w-11 h-11" />
+          <TukoLogo className="w-11 h-11 shrink-0" />
           <div>
             <h3 className="text-lg font-black text-white">
               {isFirstVisitPrompt ? 'Ku soo dhowow Tuko!' : 'Tuko • Koontada & Keydka'}
@@ -363,7 +338,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* First Visit Friendly Banner */}
-        {isFirstVisitPrompt && !currentUser && (
+        {isFirstVisitPrompt && (!currentUser || currentUser.isAnonymous) && (
           <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-teal-500/20 via-emerald-500/20 to-cyan-500/20 border border-teal-400/40 text-xs text-teal-100 flex items-start gap-2.5 shadow-inner animate-in fade-in">
             <Sparkles className="w-4 h-4 text-amber-300 shrink-0 mt-0.5 animate-pulse" />
             <div className="space-y-1">
@@ -371,13 +346,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Asalaamu Calaykum! Ku soo dhowow Tuko.
               </p>
               <p className="text-[11px] text-teal-200/90 leading-relaxed">
-                Is-diiwaangeli hal ilbiriqsi si <strong>5-taada salaadood, taxanahaaga (streaks 🔥), iyo adkaartaada</strong> loogu xafido Cloud-ka oo aysan marnaba kaaga lumin!
+                Ku xir <strong>Email ama Google</strong> si 5-taada salaadood, taxanahaaga (streaks 🔥), iyo adkaartaada loogu xafido Cloud-ka qalab kasta (Mobile, Tablet & Laptop)!
               </p>
             </div>
           </div>
         )}
 
-        {/* Notification / Alert messages (Top Banner with auto-scroll anchor) */}
+        {/* Error Notification */}
         {errorMessage && (
           <div
             ref={errorBannerRef}
@@ -390,15 +365,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
+        {/* Success Notification */}
         {successMessage && (
-          <div className="mb-4 p-3 rounded-2xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-200 text-xs flex items-start gap-2">
+          <div className="mb-4 p-3 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-200 text-xs sm:text-sm flex items-start gap-2 animate-in fade-in">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <span>{successMessage}</span>
+            <span className="font-bold">{successMessage}</span>
           </div>
         )}
 
-        {/* LOGGED IN STATE */}
-        {currentUser ? (
+        {/* LOGGED IN STATE (Non-anonymous registered account) */}
+        {currentUser && !currentUser.isAnonymous ? (
           <div className="space-y-4">
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-teal-500/20 space-y-3.5">
               <div className="flex items-center gap-3">
@@ -419,7 +395,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       {currentUser.displayName || userProfile?.displayName || 'Cibaadeyste'}
                     </h4>
                   </div>
-                  <p className="text-xs text-slate-400 truncate">{currentUser.email}</p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {currentUser.email || 'Koonto Email'}
+                  </p>
                   <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                     {getRoleBadge(userProfile?.role)}
                     <span
@@ -452,7 +430,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         }
                       }
                     }}
-                    className={`p-2 rounded-xl text-center text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                    className={`p-2 rounded-xl text-center text-xs font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       (currentGender || userProfile?.gender || 'male') === 'male'
                         ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400'
                         : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
@@ -473,7 +451,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         }
                       }
                     }}
-                    className={`p-2 rounded-xl text-center text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                    className={`p-2 rounded-xl text-center text-xs font-bold border transition flex items-center justify-center gap-1.5 cursor-pointer ${
                       (currentGender || userProfile?.gender) === 'female'
                         ? 'bg-pink-500/25 border-pink-400 text-pink-200 ring-1 ring-pink-400'
                         : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
@@ -494,7 +472,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleChangeGoal('dhawre_masaajid')}
-                    className={`p-2 rounded-xl text-center text-xs font-bold border transition ${
+                    className={`p-2 rounded-xl text-center text-xs font-bold border transition cursor-pointer ${
                       (userProfile?.goal || 'dhawre_masaajid') === 'dhawre_masaajid'
                         ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                         : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
@@ -507,7 +485,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleChangeGoal('xafide_quran')}
-                    className={`p-2 rounded-xl text-center text-xs font-bold border transition ${
+                    className={`p-2 rounded-xl text-center text-xs font-bold border transition cursor-pointer ${
                       userProfile?.goal === 'xafide_quran'
                         ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                         : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
@@ -520,155 +498,200 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleChangeGoal('soome_sunno')}
-                    className={`p-2 rounded-xl text-center text-xs font-bold border transition ${
+                    className={`p-2 rounded-xl text-center text-xs font-bold border transition cursor-pointer ${
                       userProfile?.goal === 'soome_sunno'
                         ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                         : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     <Moon className="w-3.5 h-3.5 mx-auto mb-1 text-teal-300" />
-                    <span>Soon Sunno</span>
+                    <span>Soon</span>
                   </button>
                 </div>
               </div>
 
-              {/* Sync status */}
-              <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-300">
-                <span className="flex items-center gap-1 text-teal-300">
-                  <Cloud className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Maalmo la xafiday (Cloud):</span>
-                </span>
-                <span className="font-mono font-bold text-white bg-teal-950/60 px-2 py-0.5 rounded-lg border border-teal-500/30">
-                  {totalDaysSynced} Maalmood
-                </span>
+              {/* Cloud Sync Status */}
+              <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 text-teal-300">
+                  <Cloud className="w-4 h-4 text-emerald-400" />
+                  <span>Keydka Cloud-ka:</span>
+                </div>
+                <span className="font-bold text-white">{totalDaysSynced} maalmood baa xafidan</span>
               </div>
             </div>
 
-            {/* Logout button */}
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={handleSignOut}
-                className="w-full py-2.5 rounded-2xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/30 text-rose-200 font-bold text-xs transition flex items-center justify-center gap-2 active:scale-95 shadow-md"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Ka Bax Koontada (Log Out)</span>
-              </button>
-              <p className="text-[11px] text-center text-slate-400 leading-relaxed px-2">
-                🔒 Xogtaadu waxay si sugan ugu xafidan tahay Cloud Database-ka. Marka aad ka baxdo, shaashaddu waxay bilaabaysaa eber (fresh start), marka aad mar kale soo gashona dhammaan xogtaadii ayaa laguu soo celinayaa.
-              </p>
-            </div>
+            <button
+              onClick={handleSignOut}
+              className="w-full py-2.5 rounded-2xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Ka Bax Koontada (Log Out)</span>
+            </button>
           </div>
         ) : (
-          /* NOT LOGGED IN: SIGN UP & LOGIN INTERFACE */
+          /* NOT LOGGED IN — EMAIL & GOOGLE AUTH */
           <div className="space-y-4">
-            {/* Mode Switcher Tabs */}
-            <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-slate-950/60 border border-white/10">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('signup');
-                  setAwaitingGenderStep(false);
-                  setErrorMessage(null);
-                }}
-                className={`py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
-                  authMode === 'signup'
-                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Is-Diiwaangeli (Sign Up)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('login');
-                  setAwaitingGenderStep(false);
-                  setErrorMessage(null);
-                }}
-                className={`py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
-                  authMode === 'login'
-                    ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Gal Koontada (Log In)</span>
-              </button>
-            </div>
-
-            {/* EXPLICIT GENDER CONFIRMATION STEP IF USER SUBMITTED SIGNUP WITHOUT PICKING */}
-            {authMode === 'signup' && awaitingGenderStep ? (
-              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#0b2e3b] to-[#061c24] border-2 border-teal-400/60 space-y-4 text-center shadow-2xl animate-in fade-in">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs font-black">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Tallaabada Ugu Dambeysa (Hal Mar Oo Keliya)</span>
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-base sm:text-lg font-black text-white">
-                    Ma Wiil baad tahay mise Gabar?
+            {/* VIEW A: FORGOT PASSWORD RECOVERY (EMAIL-BASED) */}
+            {isForgotPassword ? (
+              <form onSubmit={handlePasswordReset} className="space-y-3.5 p-4 rounded-2xl bg-slate-900/90 border border-teal-500/30">
+                <div className="flex items-center gap-2 text-teal-300 mb-1">
+                  <KeyRound className="w-5 h-5 text-amber-400" />
+                  <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                    Dib u Soo Celinta Furaha Sirta ah ee Email-ka
                   </h4>
-                  <p className="text-xs text-teal-200/90 leading-relaxed">
-                    Dooro qaybtaada si loo kala saaro xogta salaadaha{' '}
-                    <strong>Wiilasha (Masaajidka)</strong> iyo{' '}
-                    <strong>Gabdhaha (Guriga &amp; Maalmaha Fasaxa)</strong>:
-                  </p>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Geli cinwaankaaga email-ka hoose. Waxaan kuugu soo diri doonaa link aad dib ugu dejisan kartid furahaaga sirta ah:
+                </p>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
+                    Email-kaaga:
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="email"
+                      required
+                      value={forgotPasswordEmail || email}
+                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                      placeholder="magacaaga@email.com"
+                      className="w-full bg-slate-950 border border-teal-500/30 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 pt-2">
                   <button
                     type="button"
-                    disabled={loading}
                     onClick={() => {
-                      setSelectedGender('male');
-                      executeEmailSignUp('male');
+                      setIsForgotPassword(false);
+                      setErrorMessage(null);
                     }}
-                    className="p-3.5 rounded-2xl bg-emerald-950/70 hover:bg-emerald-900/80 border-2 border-emerald-400 text-white font-black text-xs flex flex-col items-center gap-2 transition active:scale-95 shadow-lg cursor-pointer"
+                    className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                   >
-                    <span className="text-2xl">🕌</span>
-                    <span className="text-sm font-black text-emerald-200">Wiil (Walaal)</span>
-                    <span className="text-[10px] text-slate-300 font-semibold">
-                      Salaadda Masaajidka &amp; Jamaacada
-                    </span>
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Dib u noqo</span>
                   </button>
 
                   <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => {
-                      setSelectedGender('female');
-                      executeEmailSignUp('female');
-                    }}
-                    className="p-3.5 rounded-2xl bg-pink-950/70 hover:bg-pink-900/80 border-2 border-pink-400 text-white font-black text-xs flex flex-col items-center gap-2 transition active:scale-95 shadow-lg cursor-pointer"
+                    type="submit"
+                    disabled={isSendingReset}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 text-slate-950 font-black text-xs transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    <span className="text-2xl">🌸</span>
-                    <span className="text-sm font-black text-pink-200">Gabar (Walaashay)</span>
-                    <span className="text-[10px] text-slate-300 font-semibold">
-                      Guriga &amp; Maalmaha Fasaxa (Udhur)
-                    </span>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isSendingReset ? 'Dirayaa...' : 'U Dir Link-ga Email-ka'}</span>
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setAwaitingGenderStep(false)}
-                  className="text-xs text-slate-400 hover:text-white underline"
-                >
-                  Dib ugu noqo foomka
-                </button>
-              </div>
+              </form>
             ) : (
-              <>
-                {/* SIGN UP FORM — GENDER QUESTION RIGHT AT THE VERY TOP! */}
+              /* VIEW B: SIGN IN OR SIGN UP MODES */
+              <div className="space-y-4">
+                {/* Clean Tab Switcher: [ Gal Koontada (Log In) ] | [ Isku Diiwaangeli (Sign Up) ] */}
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-900/90 rounded-2xl border border-teal-500/30">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('login');
+                      setErrorMessage(null);
+                    }}
+                    className={`py-2.5 px-3 text-center rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+                      authMode === 'login'
+                        ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md ring-1 ring-emerald-300'
+                        : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Gal Koontada (Log In)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('signup');
+                      setErrorMessage(null);
+                    }}
+                    className={`py-2.5 px-3 text-center rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer ${
+                      authMode === 'signup'
+                        ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md ring-1 ring-emerald-300'
+                        : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Isku Diiwaangeli (Sign Up)</span>
+                  </button>
+                </div>
+
+                {/* 1. LOGIN FORM */}
+                {authMode === 'login' && (
+                  <form onSubmit={handleEmailLogin} className="space-y-3.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
+                        Email-kaaga: *
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                        <input
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="magacaaga@email.com"
+                          className="w-full bg-slate-900 border border-teal-500/30 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-teal-300 uppercase tracking-wider">
+                          Furaha Sirta ah: *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForgotPasswordEmail(email);
+                            setIsForgotPassword(true);
+                            setErrorMessage(null);
+                          }}
+                          className="text-[11px] text-amber-300 hover:text-amber-200 underline font-semibold cursor-pointer"
+                        >
+                          Ma ilaawday furaha? (Soo cesho)
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                        <input
+                          type="password"
+                          required
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Furahaaga sirta ah"
+                          className="w-full bg-slate-900 border border-teal-500/30 rounded-2xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:brightness-110 text-slate-950 font-black text-xs sm:text-sm transition shadow-lg active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>{loading ? 'Gelaya Koontada...' : 'Gal Koontada (Log In)'}</span>
+                    </button>
+                  </form>
+                )}
+
+                {/* 2. SIGN UP FORM */}
                 {authMode === 'signup' && (
                   <form onSubmit={handleEmailSignUp} className="space-y-3">
-                    {/* 1. Prominent Gender Selection at Top of Signup */}
+                    {/* Gender Choice: Wiil ama Gabar */}
                     <div className="p-3 rounded-2xl bg-slate-900/90 border-2 border-teal-500/40 space-y-2 shadow-inner">
                       <label className="flex items-center justify-between text-[11px] font-black text-amber-300 uppercase tracking-wider">
                         <span>1. Ma Wiil baad tahay mise Gabar? *</span>
                         <span className="text-[10px] text-teal-300 font-bold normal-case">
-                          (Kala-saaridda Xogta)
+                          (Xogta Salaadda)
                         </span>
                       </label>
                       <div className="grid grid-cols-2 gap-2">
@@ -686,7 +709,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             <span>Wiil (Walaal)</span>
                           </div>
                           <span className="text-[10px] font-semibold text-emerald-300/90">
-                            Salaadda Masaajidka
+                            Masaajidka &amp; Jamaacada
                           </span>
                         </button>
 
@@ -704,7 +727,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             <span>Gabar (Walaashay)</span>
                           </div>
                           <span className="text-[10px] font-semibold text-pink-300/90">
-                            Guriga &amp; Maalmaha Fasaxa
+                            Guriga &amp; Fasaxa (Udhur)
                           </span>
                         </button>
                       </div>
@@ -712,7 +735,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                     <div>
                       <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                        Magacaaga oo Buuxa:
+                        Magacaaga (Ikhtiyaari):
                       </label>
                       <div className="relative">
                         <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -720,7 +743,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           type="text"
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
-                          placeholder="t.e. Cabdullaahi Cali /aa'isha Cali"
+                          placeholder="t.e. Axmed Cali / Faadumo"
                           className="w-full bg-slate-900 border border-teal-500/30 rounded-2xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
                         />
                       </div>
@@ -728,7 +751,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                     <div>
                       <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                        Email-kaaga:
+                        Email-kaaga: *
                       </label>
                       <div className="relative">
                         <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -745,7 +768,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                     <div>
                       <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                        Furaha Sirta ah (Password):
+                        Furaha Sirta ah (Ugu yaraan 6 xaraf): *
                       </label>
                       <div className="relative">
                         <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -761,201 +784,113 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
                     </div>
 
-                {/* Role / Goal Choice at Signup */}
-                <div>
-                  <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                    Dooro Hadafkaaga Cibaadada (Spiritual Focus):
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedGoal('dhawre_masaajid')}
-                      className={`p-2 rounded-xl text-center text-xs font-bold border transition ${
-                        selectedGoal === 'dhawre_masaajid'
-                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400'
-                          : 'bg-slate-900/60 border-white/5 text-slate-400'
-                      }`}
-                    >
-                      <Compass className="w-3.5 h-3.5 mx-auto mb-1 text-cyan-400" />
-                      <span className="block text-[11px]">Dhawre Masaajid</span>
-                    </button>
+                    {/* Spiritual Goal Selection */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
+                        Hadafkaaga Cibaadada:
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGoal('dhawre_masaajid')}
+                          className={`p-2 rounded-xl text-center text-xs font-bold border transition cursor-pointer ${
+                            selectedGoal === 'dhawre_masaajid'
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400'
+                              : 'bg-slate-900/60 border-white/5 text-slate-400'
+                          }`}
+                        >
+                          <Compass className="w-3.5 h-3.5 mx-auto mb-1 text-cyan-400" />
+                          <span className="block text-[11px]">Masaajid</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGoal('xafide_quran')}
+                          className={`p-2 rounded-xl text-center text-xs font-bold border transition cursor-pointer ${
+                            selectedGoal === 'xafide_quran'
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400'
+                              : 'bg-slate-900/60 border-white/5 text-slate-400'
+                          }`}
+                        >
+                          <BookOpen className="w-3.5 h-3.5 mx-auto mb-1 text-amber-400" />
+                          <span className="block text-[11px]">Qur'aan</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGoal('soome_sunno')}
+                          className={`p-2 rounded-xl text-center text-xs font-bold border transition cursor-pointer ${
+                            selectedGoal === 'soome_sunno'
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400'
+                              : 'bg-slate-900/60 border-white/5 text-slate-400'
+                          }`}
+                        >
+                          <Moon className="w-3.5 h-3.5 mx-auto mb-1 text-teal-300" />
+                          <span className="block text-[11px]">Soon</span>
+                        </button>
+                      </div>
+                    </div>
 
                     <button
-                      type="button"
-                      onClick={() => setSelectedGoal('xafide_quran')}
-                      className={`p-2 rounded-xl text-center text-xs font-bold border transition ${
-                        selectedGoal === 'xafide_quran'
-                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400'
-                          : 'bg-slate-900/60 border-white/5 text-slate-400'
-                      }`}
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:brightness-110 text-slate-950 font-black text-xs sm:text-sm transition shadow-lg active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                     >
-                      <BookOpen className="w-3.5 h-3.5 mx-auto mb-1 text-amber-400" />
-                      <span className="block text-[11px]">Qur'aan &amp; Adkaar</span>
+                      <UserPlus className="w-4 h-4" />
+                      <span>{loading ? 'Samaynaya Koontada...' : 'Isku Diiwaangeli (Sign Up)'}</span>
                     </button>
+                  </form>
+                )}
 
+                {/* 3. OPTIONAL 1-CLICK GOOGLE SIGN IN (FOR INSTANT GMAIL ACCESS) */}
+                <div className="pt-3 border-t border-white/10 space-y-2.5">
+                  <p className="text-[10px] text-center uppercase tracking-wider font-bold text-slate-400">
+                    Ama ku gal hal gujis ah:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={loading || !!loadingProvider}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-white text-slate-900 font-black text-xs sm:text-sm hover:bg-slate-100 transition shadow-xl active:scale-95 disabled:opacity-50 cursor-pointer border border-emerald-400/40"
+                  >
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                      />
+                    </svg>
+                    <span>
+                      {loadingProvider === 'google'
+                        ? 'Fureysa Google (Gmail)...'
+                        : 'Ku Gal Google (Gmail-kaaga)'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Skip Option for First-time visitors */}
+                {isFirstVisitPrompt && onSkipFirstVisit && (
+                  <div className="pt-2 text-center border-t border-white/5">
                     <button
                       type="button"
-                      onClick={() => setSelectedGoal('soome_sunno')}
-                      className={`p-2 rounded-xl text-center text-xs font-bold border transition ${
-                        selectedGoal === 'soome_sunno'
-                          ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400'
-                          : 'bg-slate-900/60 border-white/5 text-slate-400'
-                      }`}
+                      onClick={onSkipFirstVisit}
+                      className="text-xs text-slate-400 hover:text-teal-300 font-semibold transition underline underline-offset-4 cursor-pointer"
                     >
-                      <Moon className="w-3.5 h-3.5 mx-auto mb-1 text-teal-300" />
-                      <span className="block text-[11px]">Soon Sunno</span>
+                      Hadda bilow oo tijaabi adigoon gelin →
                     </button>
                   </div>
-                </div>
-
-                {/* Fresh 0-Start & Private Isolation Note */}
-                <div className="p-2.5 rounded-xl bg-teal-950/40 border border-teal-500/20 text-[11px] text-teal-200 flex items-start gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-300 shrink-0 mt-0.5" />
-                  <span>
-                    Koontadaadu waxay si toos ah uga bilaabanaysaa <strong>0 (Eber / Fresh Start)</strong>. Xogtaadu waa mid adiga kuu gaar ah oo ku xafidan UID-gaaga u gaarka ah, mana ku qasmayso xogta dadka kale!
-                  </span>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:brightness-110 text-slate-950 font-black text-xs transition shadow-lg active:scale-95 disabled:opacity-50"
-                >
-                  {loading ? 'Samaynaya Koontada...' : 'Abuur Koonto Cusub (Sign Up)'}
-                </button>
-              </form>
-            )}
-
-            {/* LOGIN FORM */}
-            {authMode === 'login' && (
-              <form onSubmit={handleEmailLogin} className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                    Email-kaaga:
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="magacaaga@email.com"
-                      className="w-full bg-slate-900 border border-teal-500/30 rounded-2xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-teal-300 uppercase tracking-wider mb-1">
-                    Furaha Sirta ah (Password):
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Furahaaga sirta ah"
-                      className="w-full bg-slate-900 border border-teal-500/30 rounded-2xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:brightness-110 text-slate-950 font-black text-xs transition shadow-lg active:scale-95 disabled:opacity-50"
-                >
-                  {loading ? 'Gelaya Koontada...' : 'Gal Koontada (Log In)'}
-                </button>
-              </form>
-            )}
-
-            <div className="relative flex items-center justify-center my-2">
-              <div className="border-t border-white/10 w-full" />
-              <span className="bg-[#082935] px-2 text-[10px] uppercase font-bold text-slate-400 absolute">
-                ama Ku Gal Google
-              </span>
-            </div>
-
-            {/* Google 1-Click Button */}
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading || !!loadingProvider}
-              className="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 transition shadow-lg active:scale-95 disabled:opacity-50"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                />
-              </svg>
-              <span>{loadingProvider === 'google' ? 'Fureysa Google...' : 'Ku Gal Hal Gujis Google (1-Click)'}</span>
-            </button>
-              </>
-            )}
-
-            {/* Alternative Social Logins: Facebook & X */}
-            <div className="pt-2 border-t border-white/5 space-y-2 text-center">
-              {/* Bottom error display so users at the bottom immediately see the message without searching */}
-              {errorMessage && (
-                <div className="p-3 rounded-2xl bg-rose-950/90 border border-rose-500/60 text-rose-100 text-xs flex items-start gap-2 text-left shadow-lg animate-in fade-in slide-in-from-bottom-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <span className="font-bold flex-1 leading-snug">{errorMessage}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleFacebookLogin}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                  title="Gal adigoo isticmaalaya Facebook"
-                >
-                  <span className="text-[#1877F2] font-black">f</span>
-                  <span>Facebook</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleTwitterLogin}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                  title="Gal adigoo isticmaalaya Twitter / X"
-                >
-                  <span className="font-black text-white">𝕏</span>
-                  <span>Twitter / X</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400">
-                (Google iyo Email ayaa hadda si toos ah u furan 100%)
-              </p>
-            </div>
-
-            {/* Skip Option for First-time visitors */}
-            {isFirstVisitPrompt && onSkipFirstVisit && (
-              <div className="pt-3 text-center border-t border-white/5">
-                <button
-                  type="button"
-                  onClick={onSkipFirstVisit}
-                  className="text-xs text-slate-400 hover:text-teal-300 font-semibold transition underline underline-offset-4"
-                >
-                  Hadda bilow oo tijaabi adigoon gelin →
-                </button>
+                )}
               </div>
             )}
           </div>

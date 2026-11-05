@@ -130,17 +130,29 @@ export function getResolvedPrayerTimes(
   settings: AppSettings,
   date: Date
 ): PrayerTimesResult {
-  // Always respect and prioritize the user's exact prayer schedule:
-  // Fajr: 04:30, Sunrise: 05:46, Duhur: 11:49, Casar: 14:57, Maqrib: 17:52, Cishe: 18:57
-  const cs = settings.customSchedule || DEFAULT_USER_PRAYER_SCHEDULE;
-  return {
-    Fajr: timeStringToDecimal(cs.Fajr?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan),
-    Sunrise: timeStringToDecimal(cs.Sunrise?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Sunrise.adhan),
-    Duhur: timeStringToDecimal(cs.Duhur?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan),
-    Casar: timeStringToDecimal(cs.Casar?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan),
-    Maqrib: timeStringToDecimal(cs.Maqrib?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan),
-    Cishe: timeStringToDecimal(cs.Cishe?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan),
-  };
+  // If the user has explicitly enabled their personal custom schedule, use that schedule
+  if (settings.useCustomSchedule) {
+    const cs = settings.customSchedule || DEFAULT_USER_PRAYER_SCHEDULE;
+    return {
+      Fajr: timeStringToDecimal(cs.Fajr?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan),
+      Sunrise: timeStringToDecimal(cs.Sunrise?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Sunrise.adhan),
+      Duhur: timeStringToDecimal(cs.Duhur?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan),
+      Casar: timeStringToDecimal(cs.Casar?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan),
+      Maqrib: timeStringToDecimal(cs.Maqrib?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan),
+      Cishe: timeStringToDecimal(cs.Cishe?.adhan || DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan),
+    };
+  }
+
+  // Otherwise calculate scientifically using astronomical position for the selected city/coords
+  const lat = typeof settings.lat === 'number' && !isNaN(settings.lat) ? settings.lat : 2.0469;
+  const lon = typeof settings.lon === 'number' && !isNaN(settings.lon) ? settings.lon : 45.3182;
+  return calculatePrayerTimes(
+    lat,
+    lon,
+    date,
+    settings.method || 'MWL',
+    settings.asrMethod || 1
+  );
 }
 
 export function formatTime12(decimalHour: number | null | undefined): string {

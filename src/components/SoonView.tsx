@@ -362,107 +362,80 @@ export const SoonView: React.FC<SoonViewProps> = ({
 
       {/* 1. SOONKA & AFURKA VIEW */}
       {activeSubTab === 'soon' && (
-        <div className="space-y-6">
-          {/* Header Banner */}
-          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092d3b] to-[#061d27] border border-teal-500/25 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl sm:text-3xl">🌙</span>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Soonka, Afurka &amp; Qadaa-ga
-              </h2>
-              <span className="text-xs text-teal-300 font-semibold">
-                {getHijriDate(now)}
-              </span>
+        <div className="space-y-4">
+          {/* Compact Mobile Header & Times */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092d3b] to-[#061d27] border border-teal-500/25 shadow-xl space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl">🌙</span>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-white">
+                    Soonka &amp; Qadaa-ga
+                  </h2>
+                  <span className="text-[11px] text-teal-300 font-semibold">
+                    {getHijriDate(now)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Fasting Toggle Button */}
+              <button
+                onClick={() => onToggleSoon(!dayData.soon)}
+                className={`px-3.5 py-2 rounded-2xl font-black text-xs transition-all shadow-md flex items-center gap-1.5 active:scale-95 ${
+                  dayData.soon
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 ring-2 ring-emerald-400'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10'
+                }`}
+              >
+                <CheckCircle className={`w-4 h-4 ${dayData.soon ? 'stroke-[3]' : 'opacity-40'}`} />
+                <span>{dayData.soon ? 'Waan Soomanahay ✓' : 'Ma Sooman Tahay?'}</span>
+              </button>
             </div>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-300 mt-2">
-            La soco xilliyada Suxuurta, Afurka, iyo Diiwaanka Qadaa-ga Soonka &amp; Salaadaha
-          </p>
-        </div>
 
-        {/* Fasting Toggle Button */}
-        <button
-          onClick={() => onToggleSoon(!dayData.soon)}
-          className={`px-4 py-2.5 rounded-2xl font-black text-xs sm:text-sm transition-all shadow-lg flex items-center gap-2 active:scale-95 ${
-            dayData.soon
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-emerald-500/25 ring-2 ring-emerald-400'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10'
-          }`}
-        >
-          <CheckCircle className={`w-4 h-4 ${dayData.soon ? 'stroke-[3]' : 'opacity-40'}`} />
-          <span>{dayData.soon ? 'Maanta Waan Soomanahay ✓' : 'Maanta Ma Sooman Tahay?'}</span>
-        </button>
-      </div>
+            {/* Compact 2-Column Afur & Suxuur */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/25">
+                <div className="flex items-center justify-between text-[11px] text-emerald-300 font-bold">
+                  <span className="flex items-center gap-1">
+                    <Sun className="w-3.5 h-3.5 text-amber-400" />
+                    Afurka (Maqrib)
+                  </span>
+                </div>
+                <div className="text-xl font-black font-mono text-amber-200 mt-1">
+                  {formatTime12(maqribTime)}
+                </div>
+                <div className="text-[10px] text-slate-300 mt-1 truncate">
+                  {currentHour < maqribTime && currentHour >= fajrTime
+                    ? `Dhiman: ${formatCountdown(afurMinutesRemaining)}`
+                    : 'Wuu dhaafay'}
+                </div>
+              </div>
 
-      {/* Sunnah Fasting Notice if Monday or Thursday */}
-      {isSunnahDay && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-400/30 flex items-center gap-3">
-          <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
-          <div className="text-xs">
-            <span className="font-extrabold text-amber-300 block">
-              Fadliga Soonka Maanta ({isMonday ? 'Isniin' : 'Khamiis'}):
-            </span>
-            <span className="text-slate-300">
-              Waxaa sunno ah in la soomo maalmaha Isniinta iyo Khamiista, maadaama camallada loo bandhigo Allaah (SWT).
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Time Cards: Afur & Suxuur */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Afur Card */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-[#12281e] via-[#0d261a] to-[#071911] border border-emerald-500/30 shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sun className="w-5 h-5 text-amber-400" />
-              <h3 className="font-extrabold text-base text-white">Waqtiga Afurka</h3>
+              <div className="p-3.5 rounded-2xl bg-teal-950/40 border border-teal-500/25">
+                <div className="flex items-center justify-between text-[11px] text-cyan-300 font-bold">
+                  <span className="flex items-center gap-1">
+                    <Moon className="w-3.5 h-3.5 text-cyan-400" />
+                    Suxuurta (Fajr)
+                  </span>
+                </div>
+                <div className="text-xl font-black font-mono text-cyan-200 mt-1">
+                  {formatTime12(fajrTime)}
+                </div>
+                <div className="text-[10px] text-slate-300 mt-1 truncate">
+                  Dhiman: {formatCountdown(suxuurMinutesRemaining)}
+                </div>
+              </div>
             </div>
-            <span className="text-xs font-bold font-mono text-emerald-300 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30">
-              Maqrib
-            </span>
-          </div>
 
-          <div className="text-2xl sm:text-3xl font-black font-mono text-amber-200">
-            {formatTime12(maqribTime)}
-          </div>
-
-          <div className="text-xs text-slate-300 pt-2 border-t border-emerald-500/20">
-            {currentHour < maqribTime && currentHour >= fajrTime ? (
-              <span className="text-emerald-300 font-semibold">
-                Afurka waxaa ka dhiman: <strong>{formatCountdown(afurMinutesRemaining)}</strong>
-              </span>
-            ) : (
-              <span className="text-slate-400">Waqtigii Afurka wuu dhaafay</span>
+            {isSunnahDay && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-400/30 flex items-center gap-2 text-[11px] text-amber-200">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Sunno ({isMonday ? 'Isniin' : 'Khamiis'}):</strong> Maanta waa maalin sunno ah in la soomo.
+                </span>
+              </div>
             )}
           </div>
-        </div>
-
-        {/* Suxuur Card */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-[#0c2430] via-[#09222c] to-[#06151c] border border-teal-500/30 shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Moon className="w-5 h-5 text-cyan-400" />
-              <h3 className="font-extrabold text-base text-white">Waqtiga Suxuurta</h3>
-            </div>
-            <span className="text-xs font-bold font-mono text-cyan-300 px-2 py-0.5 rounded-full bg-teal-500/20 border border-teal-500/30">
-              Imsaak / Fajr
-            </span>
-          </div>
-
-          <div className="text-2xl sm:text-3xl font-black font-mono text-cyan-200">
-            {formatTime12(fajrTime)}
-          </div>
-
-          <div className="text-xs text-slate-300 pt-2 border-t border-teal-500/20">
-            <span className="text-cyan-300 font-semibold">
-              Suxuurta waxaa ka dhiman: <strong>{formatCountdown(suxuurMinutesRemaining)}</strong>
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* ============================================================== */}
       {/* QADAA TRACKER: SOONKA & SALAADAHA (GAAR AHAAN GABDHAHA & GUUD) */}

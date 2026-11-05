@@ -262,7 +262,7 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({ isOpen, 
                 </div>
 
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  App-kan wuxuu si toos ah oo buuxda ugu shaqaynayaa taleefankaaga Android adigoo si toos ah ugu shuban kara shaashadda guriga (Home Screen).
+                  App-kan wuxuu si toos ah oo buuxda ugu shaqaynayaa taleefankaaga Android adigoo si toos ah ugu shuban kara shaashadda guriga (Home Screen) ama faylka <strong>tuko.apk</strong>.
                 </p>
 
                 {/* Direct 1-Click Install Button if supported */}

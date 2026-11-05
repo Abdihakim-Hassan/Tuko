@@ -161,16 +161,16 @@ export const TasbeehView: React.FC<TasbeehViewProps> = ({ dayData, onUpdateTasbe
   };
 
   return (
-    <div className="space-y-5 max-w-lg mx-auto">
-      {/* Top Banner & Dhikr Switcher */}
-      <div className="p-5 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092d3b] to-[#061d27] border border-teal-500/25 shadow-xl space-y-3">
+    <div className="space-y-4 max-w-lg md:max-w-3xl lg:max-w-4xl mx-auto">
+      {/* Compact Top Bar & Dhikr Switcher */}
+      <div className="p-3.5 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092d3b] to-[#061d27] border border-teal-500/25 shadow-xl space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">📿</span>
+            <span className="text-xl">📿</span>
             <div>
-              <h2 className="text-lg font-black text-white">Tasbeex Dijitaal ah</h2>
-              <span className="text-xs text-teal-300 font-semibold">
-                Wadarta Maanta: <strong className="text-emerald-300 font-mono">{totalToday}</strong> jeer
+              <h2 className="text-sm font-black text-white leading-tight">Tasbeex Dijitaal ah</h2>
+              <span className="text-[11px] text-teal-300 font-semibold">
+                Maanta: <strong className="text-emerald-300 font-mono">{totalToday}</strong>
               </span>
             </div>
           </div>
@@ -183,7 +183,7 @@ export const TasbeehView: React.FC<TasbeehViewProps> = ({ dayData, onUpdateTasbe
                   ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
                   : 'bg-slate-800 border-white/5 text-slate-500'
               }`}
-              title="Codka Tasbeexda"
+              title="Codka"
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </button>
@@ -195,7 +195,7 @@ export const TasbeehView: React.FC<TasbeehViewProps> = ({ dayData, onUpdateTasbe
                   ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
                   : 'bg-slate-800 border-white/5 text-slate-500'
               }`}
-              title="Gariirka (Vibration)"
+              title="Gariirka"
             >
               <Vibrate className="w-4 h-4" />
             </button>
@@ -211,7 +211,7 @@ export const TasbeehView: React.FC<TasbeehViewProps> = ({ dayData, onUpdateTasbe
         </div>
 
         {/* Dhikr Presets Carousel */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
           {PRESET_DHIKRS.map((p) => (
             <button
               key={p.id}
@@ -231,7 +231,7 @@ export const TasbeehView: React.FC<TasbeehViewProps> = ({ dayData, onUpdateTasbe
       {/* Main Touch Area - Click Anywhere to Count */}
       <div
         onClick={handleIncrement}
-        className={`relative overflow-hidden rounded-3xl p-8 sm:p-10 border transition-all duration-150 cursor-pointer select-none flex flex-col items-center justify-between min-h-[360px] shadow-2xl active:scale-[0.98] ${
+        className={`relative overflow-hidden rounded-3xl p-6 sm:p-8 border transition-all duration-150 cursor-pointer select-none flex flex-col items-center justify-between min-h-[320px] shadow-2xl active:scale-[0.98] ${
           isPressing
             ? 'bg-gradient-to-b from-[#0e3b4a] to-[#0a2732] border-cyan-400 scale-[0.99] shadow-cyan-500/20'
             : celebration

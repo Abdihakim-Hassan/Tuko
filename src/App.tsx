@@ -17,21 +17,31 @@ import { StreakInfoModal } from './components/StreakInfoModal';
 import { AllSectionsModal } from './components/AllSectionsModal';
 import { AlarmRingModal } from './components/AlarmRingModal';
 import { GenderModal } from './components/GenderModal';
+import { OfflineBanner } from './components/OfflineBanner';
+import { BottomNav } from './components/BottomNav';
+import { DesktopSidebar } from './components/DesktopSidebar';
+import { OnboardingFlow } from './components/OnboardingFlow';
+import { HelpModal } from './components/HelpModal';
+import { AdminDashboardView } from './components/AdminDashboardView';
+import { QuranReaderModal } from './components/QuranReaderModal';
+import { SOMALIA_CITIES } from './utils/somaliaCities';
 import { audioAlerts, sendBrowserNotification } from './utils/audioAlerts';
 import { logEvent } from './utils/firebase';
+import { listenToActiveAnnouncements } from './utils/adminService';
+import { ensureAll114SurahsCachedOffline } from './utils/quranAudioService';
 
-// Lazy-load secondary tabs so initial boot & reload are instantaneous (<150ms)
-const AdhanView = lazy(() => import('./components/AdhanView').then((m) => ({ default: m.AdhanView })));
-const AdhkaarView = lazy(() => import('./components/AdhkaarView').then((m) => ({ default: m.AdhkaarView })));
-const QiblaView = lazy(() => import('./components/QiblaView').then((m) => ({ default: m.QiblaView })));
-const TasbeehView = lazy(() => import('./components/TasbeehView').then((m) => ({ default: m.TasbeehView })));
-const SoonView = lazy(() => import('./components/SoonView').then((m) => ({ default: m.SoonView })));
-const QuranView = lazy(() => import('./components/QuranView').then((m) => ({ default: m.QuranView })));
-const CalendarView = lazy(() => import('./components/CalendarView').then((m) => ({ default: m.CalendarView })));
-const StatsView = lazy(() => import('./components/StatsView').then((m) => ({ default: m.StatsView })));
-const SettingsView = lazy(() => import('./components/SettingsView').then((m) => ({ default: m.SettingsView })));
-const ToDoView = lazy(() => import('./components/ToDoView').then((m) => ({ default: m.ToDoView })));
-import { AppSettings, AppUserProfile, CustomAlarm, CustomDua, DayData, PrayerName, SalaahRecord, SalaahStatus, TodoItem } from './types';
+// Import all 11 sections statically so every single tab works 100% offline with zero network chunk requests
+import { AdhanView } from './components/AdhanView';
+import { AdhkaarView } from './components/AdhkaarView';
+import { QiblaView } from './components/QiblaView';
+import { TasbeehView } from './components/TasbeehView';
+import { SoonView } from './components/SoonView';
+import { QuranView } from './components/QuranView';
+import { CalendarView } from './components/CalendarView';
+import { StatsView } from './components/StatsView';
+import { SettingsView } from './components/SettingsView';
+import { ToDoView } from './components/ToDoView';
+import { AppSettings, AppUserProfile, AppAnnouncement, CustomAlarm, CustomDua, DayData, PrayerName, SalaahRecord, SalaahStatus, TodoItem } from './types';
 import {
   calculateStreaks,
   clearUserDataOnLogout,
@@ -48,6 +58,11 @@ import {
   setActiveStorageUser,
   applyUserRequestedQuranConfig,
   INITIAL_TODOS,
+  savePersistedAuthUser,
+  loadPersistedAuthUser,
+  hasDayMeaningfulActivity,
+  mergeTwoDayRecords,
+  loadAndRecoverUserDays,
 } from './utils/storage';
 import {
   calculatePrayerTimes,
@@ -73,13 +88,16 @@ import {
   subscribeToUserTodos,
   subscribeToUserCustomDuas,
   syncUserProfile,
+  initFCM,
   updateUserProfile,
+  resetUserCloudDataInFirestore,
 } from './utils/firebase';
 import {
   pushSyncToServer,
   fetchSyncFromServer,
   subscribeCrossDeviceSync,
   CrossDeviceSyncState,
+  getSyncDeviceId,
 } from './utils/crossDeviceSync';
 import { useWindowDimensions, RNScrollView } from './utils/reactNative';
 import { LanguageProvider } from './utils/i18n';
@@ -113,7 +131,15 @@ export default function App() {
 
   useEffect(() => {
     triggerReloadVisual();
+    // Background pre-cache all 114 Surahs & Adhan voices so the entire app works 100% offline
+    const offlineTimer = setTimeout(() => {
+      ensureAll114SurahsCachedOffline().catch(() => {});
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'PRECACHE_ALL_OFFLINE' });
+      }
+    }, 1000);
     return () => {
+      clearTimeout(offlineTimer);
       if (reloadTimersRef.current.finish) clearTimeout(reloadTimersRef.current.finish);
       if (reloadTimersRef.current.hide) clearTimeout(reloadTimersRef.current.hide);
     };
@@ -125,8 +151,24 @@ export default function App() {
     type: 'success' | 'logout';
   } | null>(null);
 
-  // Authentication & Cloud Sync State
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // Authentication & Cloud Sync State — Hydrated synchronously on reload so session never drops
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
+      return auth.currentUser;
+    }
+    const persisted = loadPersistedAuthUser();
+    if (persisted?.uid) {
+      setActiveStorageUser(persisted.uid);
+      return {
+        uid: persisted.uid,
+        email: persisted.email,
+        displayName: persisted.displayName,
+        photoURL: persisted.photoURL,
+        isAnonymous: false,
+      } as unknown as User;
+    }
+    return null;
+  });
   const [userProfile, setUserProfile] = useState<AppUserProfile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [showMobileInstall, setShowMobileInstall] = useState<boolean>(false);
@@ -134,7 +176,41 @@ export default function App() {
   const [showStreakModal, setShowStreakModal] = useState<boolean>(false);
   const [showAllSectionsModal, setShowAllSectionsModal] = useState<boolean>(false);
   const [showVideoTourModal, setShowVideoTourModal] = useState<boolean>(false);
-  const [isFirstVisitPrompt, setIsFirstVisitPrompt] = useState<boolean>(() => {
+  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState<boolean>(false);
+  const [quranReaderState, setQuranReaderState] = useState<{ isOpen: boolean; surahNumber: number }>({
+    isOpen: false,
+    surahNumber: 1,
+  });
+  const [activeAnnouncements, setActiveAnnouncements] = useState<AppAnnouncement[]>([]);
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>([]);
+  const [favoriteSectionIds, setFavoriteSectionIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('tuko_favorite_sections');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return ['quran', 'todo', 'stats'];
+  });
+
+  const handleUpdateFavorites = useCallback((newIds: string[]) => {
+    setFavoriteSectionIds(newIds);
+    try {
+      localStorage.setItem('tuko_favorite_sections', JSON.stringify(newIds));
+    } catch {}
+  }, []);
+
+  // Subscribe to real-time broadcast announcements from Firestore
+  useEffect(() => {
+    const unsub = listenToActiveAnnouncements((list) => {
+      setActiveAnnouncements(list);
+    });
+    return () => unsub();
+  }, []);
+
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
     try {
       return !localStorage.getItem('tuko_onboarding_completed');
     } catch {
@@ -142,15 +218,30 @@ export default function App() {
     }
   });
 
-  // Prompt onboarding for first-time visitors after brief delay
-  useEffect(() => {
-    if (isFirstVisitPrompt && !currentUser) {
-      const timer = setTimeout(() => {
-        setShowAuthModal(true);
-      }, 700);
-      return () => clearTimeout(timer);
+  const handleCompleteOnboarding = useCallback((cityId: string, gender: 'male' | 'female' = 'male') => {
+    const foundCity = SOMALIA_CITIES.find((c) => c.id === cityId);
+    handleUpdateSettings({
+      ...(foundCity
+        ? {
+            cityId: foundCity.id,
+            cityName: `${foundCity.name} (${foundCity.region})`,
+            lat: foundCity.lat,
+            lon: foundCity.lon,
+          }
+        : {}),
+      gender,
+      genderConfirmed: true,
+    });
+    if (currentUser) {
+      localStorage.setItem(`tuko_gender_confirmed_${currentUser.uid}`, gender);
+      updateUserProfile(currentUser.uid, { gender }).catch(console.error);
+      setUserProfile((prev) => (prev ? { ...prev, gender } : prev));
+    } else {
+      localStorage.setItem('tuko_gender_confirmed_guest', gender);
     }
-  }, [isFirstVisitPrompt, currentUser]);
+    setShowGenderModal(false);
+    setShowOnboarding(false);
+  }, [currentUser]);
 
   // Prompt notification permission when user enters the app if not yet enabled
   useEffect(() => {
@@ -158,11 +249,11 @@ export default function App() {
       if (typeof window !== 'undefined' && 'Notification' in window) {
         if (Notification.permission === 'default') {
           const hasSeenPrompt = sessionStorage.getItem('tuko_notif_prompt_seen');
-          if (!hasSeenPrompt && !isFirstVisitPrompt) {
+          if (!hasSeenPrompt && !showOnboarding) {
             const timer = setTimeout(() => {
               setShowNotificationPrompt(true);
               sessionStorage.setItem('tuko_notif_prompt_seen', 'true');
-            }, 1200);
+            }, 3500);
             return () => clearTimeout(timer);
           }
         }
@@ -180,7 +271,7 @@ export default function App() {
       window.removeEventListener('click', unlockUserAudio);
       window.removeEventListener('touchstart', unlockUserAudio);
     };
-  }, [isFirstVisitPrompt]);
+  }, [showOnboarding]);
 
   const handleDismissFirstVisit = useCallback(() => {
     try {
@@ -188,7 +279,7 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    setIsFirstVisitPrompt(false);
+    setShowOnboarding(false);
     setShowAuthModal(false);
   }, []);
 
@@ -207,18 +298,140 @@ export default function App() {
   const notifiedAlarmsRef = useRef<Record<string, boolean>>({});
   const snoozeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const alarmSnoozeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const appVisibleSinceRef = useRef<number>(Date.now());
+  const isAppHiddenRef = useRef<boolean>(
+    typeof document !== 'undefined' ? document.visibilityState !== 'visible' : false
+  );
+  const lastVisibleTickRef = useRef<number>(Date.now());
+
+  // Load persisted notified events & suppress any prayer/alarm that already started before entering the app
+  useEffect(() => {
+    try {
+      const storedPrayers = localStorage.getItem(`tuko_notified_prayers_${todayKey}`);
+      if (storedPrayers) {
+        notifiedPrayersRef.current = JSON.parse(storedPrayers);
+      }
+      const storedAlarms = localStorage.getItem(`tuko_notified_alarms_${todayKey}`);
+      if (storedAlarms) {
+        notifiedAlarmsRef.current = JSON.parse(storedAlarms);
+      }
+    } catch {}
+
+    // On app mount, mark any prayer or alarm whose scheduled time has ALREADY arrived as notified
+    // so if the user dismissed an alarm/adhan outside the app and then opens the app, it NEVER rings again!
+    const now = new Date();
+    const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+    const todayResolvedPrayers = getResolvedPrayerTimes(settings, now);
+    let updatedPrayers = false;
+    let updatedAlarms = false;
+
+    PRAYER_ORDER.forEach((p) => {
+      const prayerDecimalHour = todayResolvedPrayers[p];
+      if (prayerDecimalHour != null) {
+        const diffInMinutes = (currentDecimalHour - prayerDecimalHour) * 60;
+        const schedMin = Math.round(prayerDecimalHour * 60);
+        const notificationKey = `${todayKey}_${p}_${schedMin}`;
+        if (diffInMinutes >= 0 && !notifiedPrayersRef.current[notificationKey]) {
+          notifiedPrayersRef.current[notificationKey] = true;
+          updatedPrayers = true;
+        }
+      }
+    });
+
+    const userAlarms = Array.isArray(settings.alarms) ? settings.alarms : DEFAULT_ALARMS;
+    userAlarms.forEach((alarm) => {
+      if (!alarm.enabled || !alarm.time) return;
+      const [aH, aM] = alarm.time.split(':').map(Number);
+      if (!Number.isFinite(aH) || !Number.isFinite(aM)) return;
+      const alarmTotalMin = aH * 60 + aM;
+      const diffAlarmMin = currentTotalMin - alarmTotalMin;
+      const alarmMinuteStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), aH, aM, 0, 0).getTime();
+      const createdBeforeMinuteStart = !alarm.createdAt || alarm.createdAt < alarmMinuteStartMs;
+      if ((diffAlarmMin > 0 || (diffAlarmMin === 0 && createdBeforeMinuteStart && now.getSeconds() >= 2))) {
+        const alarmKey = `${todayKey}_alarm_${alarm.id}_${alarm.time}`;
+        if (!notifiedAlarmsRef.current[alarmKey]) {
+          notifiedAlarmsRef.current[alarmKey] = true;
+          updatedAlarms = true;
+        }
+      }
+    });
+
+    if (updatedPrayers) {
+      try {
+        localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(notifiedPrayersRef.current));
+      } catch {}
+    }
+    if (updatedAlarms) {
+      try {
+        localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
+      } catch {}
+    }
+  }, [todayKey, settings]);
+
+  // Handle Adhan playback when opened from a lock-screen Push Notification or Service Worker
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const triggerIncomingAdhan = (targetPrayer?: PrayerName) => {
+      const now = new Date();
+      const currentDecimal = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+      const todayResolved = getResolvedPrayerTimes(settings, now);
+
+      let matchedPrayer: PrayerName = targetPrayer || 'Duhur';
+      let minDiff = Infinity;
+      PRAYER_ORDER.forEach((p) => {
+        const pDec = todayResolved[p];
+        if (pDec != null) {
+          const diff = Math.abs(currentDecimal - pDec) * 60;
+          if (diff < minDiff) {
+            minDiff = diff;
+            matchedPrayer = p;
+          }
+        }
+      });
+
+      const isFajr = matchedPrayer === 'Fajr';
+      const prayerVoice = settings.prayerVoices?.[matchedPrayer] || settings.adhanVoice || 'makkah';
+
+      // 1. Instantly open full-screen Takeover Overlay with prayer details
+      setActiveAdhaanOverlayPrayer(matchedPrayer);
+
+      // 2. Unlock & play authentic Sheikh Adhan
+      audioAlerts.unlockAudio();
+      audioAlerts.playAdhan(isFajr, undefined, prayerVoice);
+    };
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'PLAY_ADHAN_NOW') {
+        triggerIncomingAdhan();
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    }
+
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('action') === 'play_adhan') {
+        triggerIncomingAdhan();
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch {}
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
+    };
+  }, [settings]);
 
   const activeSyncScope = useMemo(() => {
     if (currentUser) {
-      const isAdmin = currentUser.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      return isAdmin ? 'default_shared' : `user_${currentUser.uid}`;
+      return `user_${currentUser.uid}`;
     }
-    try {
-      if (localStorage.getItem('tuko_logged_out') === 'true') {
-        return 'guest_logged_out';
-      }
-    } catch {}
-    return 'default_shared';
+    return `guest_${getSyncDeviceId()}`;
   }, [currentUser]);
 
   // Initial load for current active storage scope
@@ -245,14 +458,10 @@ export default function App() {
           for (const [dKey, rDay] of Object.entries(remoteState.days)) {
             if (!rDay) continue;
             const localDay = prev[dKey];
-            const remoteTs = Number(rDay.updatedAt) || 0;
-            const localTs = Number(localDay?.updatedAt) || 0;
-
-            if (!localDay || remoteTs >= localTs) {
-              if (JSON.stringify(localDay) !== JSON.stringify(rDay)) {
-                merged[dKey] = rDay;
-                changed = true;
-              }
+            const mergedDay = mergeTwoDayRecords(localDay, rDay);
+            if (JSON.stringify(localDay) !== JSON.stringify(mergedDay)) {
+              merged[dKey] = mergedDay;
+              changed = true;
             }
           }
 
@@ -344,31 +553,86 @@ export default function App() {
     return () => unsubscribe();
   }, [activeSyncScope, applyRemoteSyncState]);
 
-  // Manual 1-tap Sync Trigger in Header
+  // Robust helper to merge local and remote day data without losing marked prayers
+  const parseTs = (val: any): number => {
+    if (!val) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const parsed = new Date(val).getTime();
+    return isNaN(parsed) ? (Number(val) || 0) : parsed;
+  };
+
+  const mergeDayData = useCallback((local: DayData | undefined, remote: DayData): DayData => {
+    return mergeTwoDayRecords(local, remote);
+  }, []);
+
+  // Manual 1-tap Sync Trigger in Header — Synchronizes directly with Cloud Firestore
   const handleManualSync = useCallback(async () => {
     triggerReloadVisual();
     setSyncStatus('syncing');
-    const remote = await fetchSyncFromServer(activeSyncScope);
-    if (remote && (Object.keys(remote.days || {}).length > 0 || remote.settings)) {
-      applyRemoteSyncState(remote, false);
-    } else {
-      await pushSyncToServer({
-        scope: activeSyncScope,
-        isExplicitAction: true,
-        days: allDays,
-        settings,
-        todos,
-        customDuas,
-      });
-    }
-    setSyncStatus('connected');
-    setSnoozeMessage('🔄 Mobile & Tablet si toos ah ayaa la isugu waafajiyay (Live Synced)!');
-    setTimeout(() => setSnoozeMessage(null), 3500);
-  }, [activeSyncScope, allDays, applyRemoteSyncState, customDuas, settings, todos, triggerReloadVisual]);
 
-  // Real-Time Firestore onSnapshot Listeners when signed in (deferred 800ms after boot so reload is instant)
+    if (currentUser && !currentUser.isAnonymous) {
+      try {
+        const [cloudDays, cloudSettings, cloudTodos, cloudDuas] = await Promise.all([
+          loadUserDaysFromFirestore(currentUser.uid),
+          loadUserSettingsFromFirestore(currentUser.uid),
+          loadUserTodosFromFirestore(currentUser.uid),
+          loadUserCustomDuasFromFirestore(currentUser.uid),
+        ]);
+
+        if (cloudDays && Object.keys(cloudDays).length > 0) {
+          setAllDays((prev) => {
+            const merged: Record<string, DayData> = { ...prev };
+            for (const [dKey, cDay] of Object.entries(cloudDays)) {
+              merged[dKey] = mergeDayData(prev[dKey], cDay);
+            }
+            saveAllDays(merged, currentUser.uid);
+            return merged;
+          });
+        }
+
+        if (cloudSettings) {
+          setSettings((prev) => {
+            const next = { ...prev, ...cloudSettings };
+            saveSettings(next, currentUser.uid);
+            return next;
+          });
+        }
+
+        if (cloudTodos) {
+          setTodos(cloudTodos);
+          saveAllTodos(cloudTodos, currentUser.uid);
+        }
+
+        if (cloudDuas) {
+          setCustomDuas(cloudDuas);
+          saveCustomDuas(cloudDuas, currentUser.uid);
+        }
+
+        // Also push any local days to Firestore if missing in cloud
+        for (const [dKey, dVal] of Object.entries(allDays)) {
+          if (!cloudDays[dKey]) {
+            saveDayToFirestore(currentUser.uid, dKey, dVal).catch(() => {});
+          }
+        }
+
+        setSyncStatus('connected');
+        setSnoozeMessage('🔄 Xogtaada Cloud-ka (Firestore) si toos ah ayaa la isugu waafajiyay!');
+      } catch (err) {
+        console.error('Firestore manual sync error:', err);
+        setSyncStatus('connected');
+        setSnoozeMessage('⚠️ Cillad ayaa ku timid isku-xirka Cloud-ka. Fadlan hubi internet-ka.');
+      }
+    } else {
+      setSyncStatus('connected');
+      setShowAuthModal(true);
+      setSnoozeMessage('⚠️ Fadlan gal koontadaada Google si aad qalabka badan isugu xirto.');
+    }
+    setTimeout(() => setSnoozeMessage(null), 3500);
+  }, [allDays, currentUser, mergeDayData, triggerReloadVisual]);
+
+  // Real-Time Firestore onSnapshot Listeners when signed in (deferred 400ms after boot so reload is instant)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.isAnonymous) return;
     const uid = currentUser.uid;
     let unsubDays: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
@@ -381,15 +645,13 @@ export default function App() {
           setAllDays((prev) => {
             const merged: Record<string, DayData> = { ...prev };
             let changed = false;
+
             for (const [dKey, cDay] of Object.entries(cloudDays)) {
               const localDay = prev[dKey];
-              const cloudTs = Number(cDay.updatedAt) || 0;
-              const localTs = Number(localDay?.updatedAt) || 0;
-              if (!localDay || cloudTs > localTs) {
-                if (JSON.stringify(localDay) !== JSON.stringify(cDay)) {
-                  merged[dKey] = cDay;
-                  changed = true;
-                }
+              const mergedDay = mergeDayData(localDay, cDay);
+              if (JSON.stringify(localDay) !== JSON.stringify(mergedDay)) {
+                merged[dKey] = mergedDay;
+                changed = true;
               }
             }
             if (changed) {
@@ -403,9 +665,15 @@ export default function App() {
 
       unsubSettings = subscribeToUserSettings(uid, (cloudSettings) => {
         setSettings((prev) => {
-          const cloudTs = Number((cloudSettings as any)?.updatedAtMs || cloudSettings.updatedAt) || 0;
-          const localTs = Number(prev.updatedAt) || 0;
-          if (cloudTs > localTs) {
+          const parseTs = (val: any): number => {
+            if (!val) return 0;
+            if (typeof val === 'number') return isNaN(val) ? 0 : val;
+            const parsed = new Date(val).getTime();
+            return isNaN(parsed) ? (Number(val) || 0) : parsed;
+          };
+          const cloudTs = parseTs((cloudSettings as any)?.updatedAtMs || cloudSettings.updatedAt);
+          const localTs = parseTs(prev.updatedAt);
+          if (cloudTs >= localTs) {
             const merged: AppSettings = {
               ...DEFAULT_SETTINGS,
               ...prev,
@@ -416,7 +684,7 @@ export default function App() {
                 ...(prev.customSchedule || {}),
                 ...(cloudSettings.customSchedule || {}),
               },
-              updatedAt: cloudTs,
+              updatedAt: cloudTs || Date.now(),
             };
             if (JSON.stringify(prev) !== JSON.stringify(merged)) {
               saveSettings(merged, uid);
@@ -457,185 +725,274 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // Firebase Auth state listener — 0ms instant local hydration + non-blocking background Cloud Sync
-  useEffect(() => {
-    let syncTimer: ReturnType<typeof setTimeout> | null = null;
+  // Unified Account Hydration & Cloud Recovery (0ms local restore + immediate Firestore pull/merge)
+  const restoreAndSyncUserAccount = useCallback(
+    async (
+      user: User,
+      options?: { isNewRegistration?: boolean; selectedGender?: 'male' | 'female' }
+    ) => {
+      if (!user || user.isAnonymous) return;
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      try {
+        localStorage.removeItem('tuko_logged_out');
+      } catch {}
+
+      // 1. Persist user snapshot & switch active storage scope immediately (0ms)
+      savePersistedAuthUser(user);
+      setActiveStorageUser(user.uid);
       setCurrentUser(user);
-      if (syncTimer) {
-        clearTimeout(syncTimer);
-        syncTimer = null;
+
+      // 2. Immediately recover & load user-scoped localStorage (including any guest activity before login)
+      let localDays = loadAndRecoverUserDays(user.uid);
+      const isAdminAccount =
+        user.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const userScope = isAdminAccount ? 'default_shared' : `user_${user.uid}`;
+
+      if (
+        isAdminAccount &&
+        Object.values(localDays).filter((d) => hasDayMeaningfulActivity(d)).length <= 1
+      ) {
+        localDays = applyUserRequestedQuranConfig(localDays, getTodayKey());
+        saveAllDays(localDays, user.uid);
       }
 
-      if (user) {
-        try {
-          localStorage.removeItem('tuko_logged_out');
-        } catch {}
+      if (Object.keys(localDays).length > 0) {
+        setAllDays(localDays);
+      }
 
-        // 1. Immediately hydrate from user-scoped localStorage in 0ms so reload never waits on network
-        setActiveStorageUser(user.uid);
-        const cachedDays = loadAllDays(user.uid);
-        const cachedSettings = loadSettings(user.uid);
-        const cachedTodos = loadAllTodos(user.uid);
-        const cachedDuas = loadCustomDuas(user.uid);
+      const localSettings = loadSettings(user.uid);
+      const localTodos = loadAllTodos(user.uid);
+      const localDuas = loadCustomDuas(user.uid);
 
-        if (Object.keys(cachedDays).length > 0) {
-          setAllDays(cachedDays);
+      setSettings(localSettings);
+      setTodos(localTodos);
+      setCustomDuas(localDuas);
+
+      // 3. Immediately fetch Firestore Cloud data & Profile in parallel (zero artificial delay!)
+      try {
+        const [syncedProfile, cloudDays, cloudSettings, cloudTodos, cloudDuas] =
+          await Promise.all([
+            syncUserProfile(
+              user,
+              undefined,
+              undefined,
+              options?.isNewRegistration ? options?.selectedGender : undefined
+            ).catch(() => null),
+            loadUserDaysFromFirestore(user.uid),
+            loadUserSettingsFromFirestore(user.uid),
+            loadUserTodosFromFirestore(user.uid),
+            loadUserCustomDuasFromFirestore(user.uid),
+          ]);
+
+        if (syncedProfile) {
+          setUserProfile(syncedProfile);
         }
-        setSettings(cachedSettings);
-        setTodos(cachedTodos);
-        setCustomDuas(cachedDuas);
 
-        const isAdminAccount =
-          user.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-        const userScope = isAdminAccount ? 'default_shared' : `user_${user.uid}`;
+        // Restore or sync Todos
+        if (cloudTodos && cloudTodos.length > 0) {
+          setTodos(cloudTodos);
+          saveAllTodos(cloudTodos, user.uid);
+        } else {
+          saveTodosToFirestore(user.uid, localTodos).catch(() => {});
+        }
 
-        // 2. Defer network Firestore sync by 450ms so initial page render & reload are 100% lag-free
-        syncTimer = setTimeout(async () => {
-          let syncedProfile: AppUserProfile | null = null;
-          try {
-            syncedProfile = await syncUserProfile(user);
-            setUserProfile(syncedProfile);
-          } catch (err) {
-            console.error('Error syncing profile:', err);
+        // Restore or sync Custom Duas
+        if (cloudDuas && cloudDuas.length > 0) {
+          setCustomDuas(cloudDuas);
+          saveCustomDuas(cloudDuas, user.uid);
+        } else {
+          saveCustomDuasToFirestore(user.uid, localDuas).catch(() => {});
+        }
+
+        // Merge Local + Cloud Days without losing any recorded prayers, Quran pages, Surahs, or Adhkaar
+        let mergedDays: Record<string, DayData> = { ...localDays };
+        if (cloudDays && Object.keys(cloudDays).length > 0) {
+          for (const [dKey, cDay] of Object.entries(cloudDays)) {
+            mergedDays[dKey] = mergeTwoDayRecords(mergedDays[dKey], cDay);
           }
+        }
 
-          try {
-            const [cloudDays, cloudSettings, cloudTodos, cloudDuas] = await Promise.all([
-              loadUserDaysFromFirestore(user.uid),
-              loadUserSettingsFromFirestore(user.uid),
-              loadUserTodosFromFirestore(user.uid),
-              loadUserCustomDuasFromFirestore(user.uid),
-            ]);
+        if (
+          isAdminAccount &&
+          Object.values(mergedDays).filter((d) => hasDayMeaningfulActivity(d)).length <= 1
+        ) {
+          mergedDays = applyUserRequestedQuranConfig(mergedDays, getTodayKey());
+        }
 
-            if (cloudTodos !== null) {
-              setTodos(cloudTodos);
-              saveAllTodos(cloudTodos, user.uid);
-            } else {
-              const localUserTodos = loadAllTodos(user.uid);
-              saveTodosToFirestore(user.uid, localUserTodos).catch(() => {});
+        if (Object.keys(mergedDays).length === 0) {
+          const currentToday = getTodayKey();
+          mergedDays = {
+            [currentToday]: { ...createEmptyDay(), updatedAt: Date.now() },
+          };
+        }
+
+        setAllDays(mergedDays);
+        saveAllDays(mergedDays, user.uid);
+
+        // Push any local days with real activity that are missing or newer than Firestore back to Cloud
+        for (const [dKey, dVal] of Object.entries(mergedDays)) {
+          if (hasDayMeaningfulActivity(dVal)) {
+            const cDay = cloudDays?.[dKey];
+            if (!cDay || JSON.stringify(cDay) !== JSON.stringify(dVal)) {
+              saveDayToFirestore(user.uid, dKey, dVal).catch(() => {});
             }
-
-            if (cloudDuas !== null) {
-              setCustomDuas(cloudDuas);
-              saveCustomDuas(cloudDuas, user.uid);
-            }
-
-            const welcomeSessionKey = `tuko_welcomed_session_${user.uid}`;
-            const alreadyWelcomedThisSession = (() => {
-              try {
-                return sessionStorage.getItem(welcomeSessionKey) === 'true';
-              } catch {
-                return true;
-              }
-            })();
-
-            if (cloudDays && Object.keys(cloudDays).length > 0) {
-              setAllDays((prev) => {
-                const merged = { ...prev, ...cloudDays };
-                saveAllDays(merged, user.uid);
-                return merged;
-              });
-              if (!alreadyWelcomedThisSession) {
-                try {
-                  sessionStorage.setItem(welcomeSessionKey, 'true');
-                } catch {}
-                setAccountActionAlert({
-                  message: `Ku soo dhowow koontadaada gaarka ah, ${user.displayName || 'Cibaadeyste'}! Dhammaan xogtaadii hore si buuxda ayaa Cloud-ka lagaga soo celiyay.`,
-                  type: 'success',
-                });
-              }
-            } else if (isAdminAccount) {
-              const adminDays = applyUserRequestedQuranConfig(
-                loadAllDays(user.uid),
-                getTodayKey()
-              );
-              setAllDays(adminDays);
-              saveAllDays(adminDays, user.uid);
-              pushSyncToServer({ scope: userScope, days: adminDays });
-              Object.entries(adminDays).forEach(([dKey, dVal]) => {
-                saveDayToFirestore(user.uid, dKey, dVal).catch(() => {});
-              });
-            } else if (Object.keys(cachedDays).length === 0) {
-              const currentToday = getTodayKey();
-              const zeroDay = { ...createEmptyDay(), updatedAt: Date.now() };
-              const freshDays: Record<string, DayData> = { [currentToday]: zeroDay };
-              setAllDays(freshDays);
-              saveAllDays(freshDays, user.uid);
-              saveDayToFirestore(user.uid, currentToday, zeroDay).catch(() => {});
-              if (!alreadyWelcomedThisSession) {
-                try {
-                  sessionStorage.setItem(welcomeSessionKey, 'true');
-                } catch {}
-                setAccountActionAlert({
-                  message: `Ku soo dhowow Tuko, ${user.displayName || 'Cibaadeyste'}! Koontadaada cusub waxay si nadiif ah uga bilaabatay 0 (Eber / Fresh Start).`,
-                  type: 'success',
-                });
-              }
-            }
-
-            const localConfirmedGender = localStorage.getItem(
-              `tuko_gender_confirmed_${user.uid}`
-            ) as 'male' | 'female' | null;
-            const resolvedGender =
-              localConfirmedGender || syncedProfile?.gender || cloudSettings?.gender;
-
-            if (cloudSettings) {
-              const cloudTs =
-                Number((cloudSettings as any)?.updatedAtMs || cloudSettings.updatedAt) || 0;
-              const merged: AppSettings = {
-                ...DEFAULT_SETTINGS,
-                ...cloudSettings,
-                gender: resolvedGender || 'male',
-                genderConfirmed: !!resolvedGender || !!cloudSettings.genderConfirmed,
-                startingStreakOffset: cloudSettings.startingStreakOffset ?? 0,
-                useCustomSchedule: true,
-                customSchedule: {
-                  ...DEFAULT_USER_PRAYER_SCHEDULE,
-                  ...(cloudSettings.customSchedule || {}),
-                },
-                alarms: Array.isArray(cloudSettings.alarms) ? cloudSettings.alarms : DEFAULT_ALARMS,
-                updatedAt: cloudTs,
-              };
-              setSettings(merged);
-              saveSettings(merged, user.uid);
-              if (!resolvedGender && !cloudSettings.genderConfirmed) {
-                setShowGenderModal(true);
-              }
-            } else {
-              const freshUserSettings: AppSettings = {
-                ...DEFAULT_SETTINGS,
-                gender: resolvedGender || 'male',
-                genderConfirmed: !!resolvedGender,
-                startingStreakOffset: 0,
-                useCustomSchedule: true,
-                customSchedule: { ...DEFAULT_USER_PRAYER_SCHEDULE },
-                alarms: DEFAULT_ALARMS,
-                updatedAt: Date.now(),
-              };
-              setSettings(freshUserSettings);
-              saveSettings(freshUserSettings, user.uid);
-              saveSettingsToFirestore(user.uid, freshUserSettings).catch(() => {});
-              if (!resolvedGender) {
-                setShowGenderModal(true);
-              }
-            }
-          } catch (err) {
-            console.error('Error synchronizing with Firestore:', err);
           }
-        }, 450);
+        }
+
+        pushSyncToServer({
+          scope: userScope,
+          days: mergedDays,
+        });
+
+        // Welcome banner once per session
+        const welcomeSessionKey = `tuko_welcomed_session_${user.uid}`;
+        const alreadyWelcomedThisSession = (() => {
+          try {
+            return sessionStorage.getItem(welcomeSessionKey) === 'true';
+          } catch {
+            return true;
+          }
+        })();
+
+        if (!alreadyWelcomedThisSession) {
+          try {
+            sessionStorage.setItem(welcomeSessionKey, 'true');
+          } catch {}
+          const hasHistory = Object.values(mergedDays).some((d) =>
+            hasDayMeaningfulActivity(d)
+          );
+          setAccountActionAlert({
+            message: hasHistory
+              ? `Ku soo dhowow koontadaada, ${user.displayName || 'Cibaadeyste'}! Dhammaan xogtaadii hore si buuxda ayaa laguu soo celiyay.`
+              : `Ku soo dhowow Tuko, ${user.displayName || 'Cibaadeyste'}! Koontadaadu waa diyaar.`,
+            type: 'success',
+          });
+        }
+
+        // Restore or initialize Settings (never overwrite existing cloud settings with guest defaults!)
+        const localConfirmedGender = localStorage.getItem(
+          `tuko_gender_confirmed_${user.uid}`
+        ) as 'male' | 'female' | null;
+        const resolvedGender =
+          (options?.isNewRegistration ? options?.selectedGender : undefined) ||
+          cloudSettings?.gender ||
+          syncedProfile?.gender ||
+          localConfirmedGender ||
+          options?.selectedGender;
+
+        if (cloudSettings) {
+          const cloudTs =
+            Number((cloudSettings as any)?.updatedAtMs || cloudSettings.updatedAt) ||
+            Date.now();
+          const mergedSettings: AppSettings = {
+            ...DEFAULT_SETTINGS,
+            ...localSettings,
+            ...cloudSettings,
+            gender: resolvedGender || 'male',
+            genderConfirmed:
+              !!resolvedGender ||
+              !!cloudSettings.genderConfirmed ||
+              !!localSettings.genderConfirmed,
+            startingStreakOffset:
+              cloudSettings.startingStreakOffset ??
+              localSettings.startingStreakOffset ??
+              0,
+            useCustomSchedule: true,
+            customSchedule: {
+              ...DEFAULT_USER_PRAYER_SCHEDULE,
+              ...(localSettings.customSchedule || {}),
+              ...(cloudSettings.customSchedule || {}),
+            },
+            alarms: Array.isArray(cloudSettings.alarms)
+              ? cloudSettings.alarms
+              : Array.isArray(localSettings.alarms)
+              ? localSettings.alarms
+              : DEFAULT_ALARMS,
+            updatedAt: cloudTs,
+          };
+          setSettings(mergedSettings);
+          saveSettings(mergedSettings, user.uid);
+          if (resolvedGender) {
+            localStorage.setItem(`tuko_gender_confirmed_${user.uid}`, resolvedGender);
+          }
+        } else {
+          const freshUserSettings: AppSettings = {
+            ...DEFAULT_SETTINGS,
+            ...localSettings,
+            gender: resolvedGender || 'male',
+            genderConfirmed: !!resolvedGender || !!localSettings.genderConfirmed,
+            startingStreakOffset: localSettings.startingStreakOffset ?? 0,
+            useCustomSchedule: true,
+            customSchedule: {
+              ...DEFAULT_USER_PRAYER_SCHEDULE,
+              ...(localSettings.customSchedule || {}),
+            },
+            alarms: Array.isArray(localSettings.alarms)
+              ? localSettings.alarms
+              : DEFAULT_ALARMS,
+            updatedAt: Date.now(),
+          };
+          setSettings(freshUserSettings);
+          saveSettings(freshUserSettings, user.uid);
+          saveSettingsToFirestore(user.uid, freshUserSettings).catch(() => {});
+          if (resolvedGender) {
+            localStorage.setItem(`tuko_gender_confirmed_${user.uid}`, resolvedGender);
+          } else {
+            setShowGenderModal(true);
+          }
+        }
+      } catch (err) {
+        console.error('Error synchronizing with Firestore:', err);
+      }
+    },
+    []
+  );
+
+  // Firebase Auth state listener — Wait for authStateReady so page reload NEVER logs out the user
+  useEffect(() => {
+    let isMounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!isMounted) return;
+
+      if (user && !user.isAnonymous) {
+        await restoreAndSyncUserAccount(user);
       } else {
+        // Wait for Firebase Auth IndexedDB persistence to finish initializing before acting on null
+        try {
+          if (typeof (auth as any).authStateReady === 'function') {
+            await (auth as any).authStateReady();
+          }
+        } catch {}
+        if (!isMounted) return;
+
+        const latestUser = auth.currentUser;
+        if (latestUser && !latestUser.isAnonymous) {
+          await restoreAndSyncUserAccount(latestUser);
+          return;
+        }
+
+        // Keep persisted user active across offline/fast reloads unless user explicitly logged out
+        const persisted = loadPersistedAuthUser();
+        const explicitlyLoggedOut =
+          localStorage.getItem('tuko_logged_out') === 'true';
+
+        if (!explicitlyLoggedOut && persisted?.uid) {
+          setActiveStorageUser(persisted.uid);
+          return;
+        }
+
+        setCurrentUser(null);
         setActiveStorageUser(null);
         setUserProfile(null);
       }
     });
 
     return () => {
-      if (syncTimer) clearTimeout(syncTimer);
+      isMounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [restoreAndSyncUserAccount]);
 
   // Automatic midnight day-switch
   useEffect(() => {
@@ -674,31 +1031,315 @@ export default function App() {
     return calculateStreaks(allDays, todayKey, settings);
   }, [allDays, todayKey, settings]);
 
+  // Register this device for server-sent Adhan push (works when phone is locked / app closed)
+  const [notifPermissionTick, setNotifPermissionTick] = useState(0);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') {
+      // Re-check periodically in case the user grants permission later
+      const t = setTimeout(() => setNotifPermissionTick((n) => n + 1), 15000);
+      return () => clearTimeout(t);
+    }
+
+    if (!currentUser || currentUser.isAnonymous) {
+      return;
+    }
+
+    const now = new Date();
+    const times = getResolvedPrayerTimes(settings, now);
+    const utcList = PRAYER_ORDER.map((p) => {
+      const dec = times[p];
+      if (dec == null || isNaN(dec)) return null;
+      const h = Math.floor(dec);
+      const m = Math.round((dec - h) * 60);
+      const local = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
+      return `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+    }).filter((x): x is string => !!x);
+    const lang = settings.language === 'en' ? 'en' : 'so';
+    initFCM(currentUser.uid, utcList, lang).catch(() => {});
+  }, [currentUser, settings.customSchedule, settings.useCustomSchedule, settings.lat, settings.lon, settings.method, settings.language, todayKey, notifPermissionTick]);
+
+  // 100% Native Exact Alarm Sync with Android OS AlarmManager (Prayers + Custom Alarms + To-Do Reminders)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).TukoNative?.schedulePrayerTimes) {
+      try {
+        const now = new Date();
+        const pad2 = (n: number) => String(n).padStart(2, '0');
+        const scheduleToSync: Array<{
+          id: string;
+          prayer: string;
+          timestamp: number;
+          time24: string;
+          voice: string;
+          soundType: string;
+          type: 'adhan' | 'alarm';
+          days?: number[];
+        }> = [];
+
+        // 1. Sync 5 Daily Prayer Adhans (Today & Tomorrow)
+        if (settings.adhanSound !== false) {
+          [0, 1].forEach((dayOffset) => {
+            const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+            const resolved = getResolvedPrayerTimes(settings, targetDate);
+
+            PRAYER_ORDER.forEach((p) => {
+              const decHour = resolved[p];
+              if (decHour != null && !isNaN(decHour)) {
+                let h = Math.floor(decHour);
+                let m = Math.round((decHour - h) * 60);
+                if (m === 60) {
+                  m = 0;
+                  h += 1;
+                }
+                const dt = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), h, m, 0);
+                const voice = settings.prayerVoices?.[p] || settings.adhanVoice || (p === 'Fajr' ? 'fajr' : 'makkah');
+                const time24 = `${pad2(h)}:${pad2(m)}`;
+
+                scheduleToSync.push({
+                  id: `prayer_${p}_${dayOffset}`,
+                  prayer: p,
+                  timestamp: dt.getTime(),
+                  time24,
+                  voice,
+                  soundType: 'adhan',
+                  type: 'adhan',
+                });
+              }
+            });
+          });
+        }
+
+        // 2. Sync Custom Alarms (Today & Tomorrow)
+        const userAlarms = Array.isArray(settings.alarms) ? settings.alarms : DEFAULT_ALARMS;
+        userAlarms.forEach((alarm) => {
+          if (!alarm.enabled || !alarm.time) return;
+          const [aH, aM] = alarm.time.split(':').map(Number);
+          if (!Number.isFinite(aH) || !Number.isFinite(aM)) return;
+          const time24 = `${pad2(aH)}:${pad2(aM)}`;
+
+          [0, 1].forEach((dayOffset) => {
+            const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, aH, aM, 0);
+            const dow = dt.getDay();
+            if (Array.isArray(alarm.days) && alarm.days.length > 0 && !alarm.days.includes(dow)) return;
+
+            scheduleToSync.push({
+              id: `alarm_${alarm.id}_${dayOffset}`,
+              prayer: alarm.label || 'Alaarm',
+              timestamp: dt.getTime(),
+              time24,
+              voice: alarm.selectedVoice || settings.adhanVoice || 'makkah',
+              soundType: alarm.sound || 'adhan',
+              type: 'alarm',
+              days: Array.isArray(alarm.days) ? alarm.days : [],
+            });
+          });
+        });
+
+        // 3. Sync To-Do Reminders with dueTime
+        todos.forEach((todo) => {
+          if (todo.completed || !todo.dueTime) return;
+          const [tH, tM] = todo.dueTime.split(':').map(Number);
+          if (!Number.isFinite(tH) || !Number.isFinite(tM)) return;
+          const time24 = `${pad2(tH)}:${pad2(tM)}`;
+          const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), tH, tM, 0);
+
+          scheduleToSync.push({
+            id: `todo_${todo.id}`,
+            prayer: `Hawshaada: ${todo.task}`,
+            timestamp: dt.getTime(),
+            time24,
+            voice: settings.adhanVoice || 'makkah',
+            soundType: 'chime',
+            type: 'alarm',
+          });
+        });
+
+        (window as any).TukoNative.schedulePrayerTimes(JSON.stringify(scheduleToSync));
+      } catch (err) {
+        console.warn('Native exact alarm sync notice:', err);
+      }
+    }
+  }, [
+    settings.cityId,
+    settings.cityName,
+    settings.lat,
+    settings.lon,
+    settings.customSchedule,
+    settings.useCustomSchedule,
+    settings.prayerVoices,
+    settings.adhanVoice,
+    settings.adhanSound,
+    settings.alarms,
+    todos,
+  ]);
+
   // Check for Adhaan time & Custom Alarms periodically with sleep recovery and visibility detection
   useEffect(() => {
+    const userAlarmsList = Array.isArray(settings.alarms) ? settings.alarms : DEFAULT_ALARMS;
+
+    // Silently marks any prayer, custom alarm, or todo that is currently in its trigger window
+    // as already notified so returning from outside the app NEVER re-triggers it inside the app.
+    const markCurrentWindowAsHandledSilently = (now: Date) => {
+      const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+      const currentDayOfWeek = now.getDay();
+      const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+      const todayResolvedPrayers = getResolvedPrayerTimes(settings, now);
+      let prayersUpdated = false;
+      let alarmsUpdated = false;
+
+      PRAYER_ORDER.forEach((p) => {
+        const prayerDecimalHour = todayResolvedPrayers[p];
+        if (prayerDecimalHour != null) {
+          const diffInMinutes = (currentDecimalHour - prayerDecimalHour) * 60;
+          const schedMin = Math.round(prayerDecimalHour * 60);
+          const notificationKey = `${todayKey}_${p}_${schedMin}`;
+          const preAlertMinutes = Number(settings.prePrayerAlertMinutes) || 0;
+          const prePrayerKey = `${todayKey}_pre_${p}_${schedMin}`;
+
+          if (
+            preAlertMinutes > 0 &&
+            diffInMinutes <= -preAlertMinutes &&
+            diffInMinutes >= -(preAlertMinutes + 2.0) &&
+            !notifiedPrayersRef.current[prePrayerKey]
+          ) {
+            notifiedPrayersRef.current[prePrayerKey] = true;
+            prayersUpdated = true;
+          }
+
+          if (diffInMinutes >= 0 && diffInMinutes < 5.0 && !notifiedPrayersRef.current[notificationKey]) {
+            notifiedPrayersRef.current[notificationKey] = true;
+            prayersUpdated = true;
+          }
+        }
+      });
+
+      userAlarmsList.forEach((alarm) => {
+        if (!alarm.enabled || !alarm.time) return;
+        const matchesDay = !alarm.days || alarm.days.length === 0 || alarm.days.includes(currentDayOfWeek);
+        if (!matchesDay) return;
+        const [aH, aM] = alarm.time.split(':').map(Number);
+        if (!Number.isFinite(aH) || !Number.isFinite(aM)) return;
+        const alarmTotalMin = aH * 60 + aM;
+        const diffAlarmMin = currentTotalMin - alarmTotalMin;
+        if (diffAlarmMin >= 0 && diffAlarmMin <= 2) {
+          const alarmKey = `${todayKey}_alarm_${alarm.id}_${alarm.time}`;
+          if (!notifiedAlarmsRef.current[alarmKey]) {
+            notifiedAlarmsRef.current[alarmKey] = true;
+            alarmsUpdated = true;
+          }
+        }
+      });
+
+      todos.forEach((todo) => {
+        if (todo.completed || !todo.dueTime) return;
+        if (todo.dueDate && todo.dueDate !== todayKey) return;
+        const [tH, tM] = todo.dueTime.split(':').map(Number);
+        if (!Number.isFinite(tH) || !Number.isFinite(tM)) return;
+        const todoTotalMin = tH * 60 + tM;
+        const diffTodoMin = currentTotalMin - todoTotalMin;
+        if (diffTodoMin >= 0 && diffTodoMin < 5) {
+          const todoKey = `${todayKey}_todo_${todo.id}_${todo.dueTime}`;
+          if (!notifiedAlarmsRef.current[todoKey]) {
+            notifiedAlarmsRef.current[todoKey] = true;
+            alarmsUpdated = true;
+          }
+        }
+      });
+
+      if (prayersUpdated) {
+        try {
+          localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(notifiedPrayersRef.current));
+        } catch {}
+      }
+      if (alarmsUpdated) {
+        try {
+          localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
+        } catch {}
+      }
+    };
+
     const checkScheduleAndAlarms = () => {
       const now = new Date();
+      const nowMs = now.getTime();
+      const isCurrentlyHidden = typeof document !== 'undefined' && document.visibilityState !== 'visible';
+
+      // 0. If the user is OUTSIDE the app (hidden/background), Native Android (AdhanForegroundService / AlarmManager)
+      // handles ringing and notifications outside the app. Never open in-app modals or trigger WebView audio while hidden!
+      if (isCurrentlyHidden) {
+        isAppHiddenRef.current = true;
+        markCurrentWindowAsHandledSilently(now);
+        return;
+      }
+
+      // 0b. If the user JUST entered/returned to the app from outside (or woke from sleep gap > 4.5s),
+      // mark any alarm/prayer that arrived while outside as already handled and ensure no stale modal or audio pops up!
+      const elapsedSinceLastTick = nowMs - lastVisibleTickRef.current;
+      if (isAppHiddenRef.current || elapsedSinceLastTick > 4500) {
+        isAppHiddenRef.current = false;
+        appVisibleSinceRef.current = nowMs;
+        lastVisibleTickRef.current = nowMs;
+        markCurrentWindowAsHandledSilently(now);
+        setActiveRingingAlarm(null);
+        setActiveAdhaanOverlayPrayer(null);
+        audioAlerts.stopAlarm();
+        return;
+      }
+
+      lastVisibleTickRef.current = nowMs;
+
       const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
       const currentDayOfWeek = now.getDay();
 
       // ALWAYS calculate today's resolved prayer times using the actual current moment
       const todayResolvedPrayers = getResolvedPrayerTimes(settings, now);
 
-      // 1. Check Prayer Adhans (0 to 5 minute tolerance window for sleep/background throttle)
+      // 1. Check Prayer Adhans & Pre-Prayer Reminders
       PRAYER_ORDER.forEach((p) => {
         const prayerDecimalHour = todayResolvedPrayers[p];
         if (prayerDecimalHour != null) {
           const diffInMinutes = (currentDecimalHour - prayerDecimalHour) * 60;
-          const notificationKey = `${todayKey}_${p}`;
-          
-          // Debugging
-          if (diffInMinutes >= -1 && diffInMinutes < 5.0) {
-              console.log(`Checking prayer ${p}: now=${currentDecimalHour}, prayer=${prayerDecimalHour}, diff=${diffInMinutes}, notified=${notifiedPrayersRef.current[notificationKey]}`);
+          const schedMin = Math.round(prayerDecimalHour * 60);
+          const pH = Math.floor(schedMin / 60);
+          const pM = schedMin % 60;
+          const pTime24 = `${String(pH).padStart(2, '0')}:${String(pM).padStart(2, '0')}`;
+          const prayerStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pH, pM, 0, 0).getTime();
+          const notificationKey = `${todayKey}_${p}_${schedMin}`;
+          const preAlertMinutes = Number(settings.prePrayerAlertMinutes) || 0;
+          const prePrayerKey = `${todayKey}_pre_${p}_${schedMin}`;
+
+          // Pre-prayer alert: only when explicitly turned on in settings (> 0 min)
+          if (
+            preAlertMinutes > 0 &&
+            settings.prePrayerSound !== false &&
+            diffInMinutes <= -preAlertMinutes &&
+            diffInMinutes >= -(preAlertMinutes + 2.0) &&
+            !notifiedPrayersRef.current[prePrayerKey]
+          ) {
+            notifiedPrayersRef.current[prePrayerKey] = true;
+            try {
+              localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(notifiedPrayersRef.current));
+            } catch {}
+            audioAlerts.playPrePrayerChime();
+            const somaliPrayerName = PRAYER_SOMALI_LABELS[p];
+            sendBrowserNotification(
+              'Diyaargarowga Salaadda',
+              `⏳ Waxaa dhow waqtiga salaadda ${somaliPrayerName} (${preAlertMinutes} daqiiqo ka dib). Fadlan weeso qaado oo isu diyaari cibaadada.`
+            );
+            setSnoozeMessage(`⏳ ${preAlertMinutes} daqiiqo ayaa ka dhiman ${somaliPrayerName}. Fadlan weeso qaado!`);
+            setTimeout(() => setSnoozeMessage(null), 6000);
           }
 
+          // Real-time prayer Adhan alert: only trigger inside the app if the user was inside the app when prayer time started
           if (diffInMinutes >= 0 && diffInMinutes < 5.0 && !notifiedPrayersRef.current[notificationKey]) {
-            console.log(`Triggering prayer ${p}!`);
             notifiedPrayersRef.current[notificationKey] = true;
+            try {
+              localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(notifiedPrayersRef.current));
+            } catch {}
+
+            const wasInsideWhenPrayerStarted = appVisibleSinceRef.current <= prayerStartMs + 3000;
+            if (!wasInsideWhenPrayerStarted || audioAlerts.isMinuteSilenced(pTime24)) {
+              return;
+            }
 
             // 1. Play authentic Adhan sound for this prayer's chosen voice (enabled by default)
             if (settings.adhanSound !== false) {
@@ -719,11 +1360,10 @@ export default function App() {
         }
       });
 
-      // 2. Check Custom Alarms with smart sleep recovery window
-      const userAlarms = Array.isArray(settings.alarms) ? settings.alarms : DEFAULT_ALARMS;
+      // 2. Check Custom Alarms
       const currentTotalMin = now.getHours() * 60 + now.getMinutes();
 
-      userAlarms.forEach((alarm) => {
+      userAlarmsList.forEach((alarm) => {
         if (!alarm.enabled || !alarm.time) return;
 
         const matchesDay = !alarm.days || alarm.days.length === 0 || alarm.days.includes(currentDayOfWeek);
@@ -733,25 +1373,26 @@ export default function App() {
         if (!Number.isFinite(aH) || !Number.isFinite(aM)) return;
         const alarmTotalMin = aH * 60 + aM;
         const diffAlarmMin = currentTotalMin - alarmTotalMin;
+        const alarmTime24 = `${String(aH).padStart(2, '0')}:${String(aM).padStart(2, '0')}`;
+        const alarmMinuteStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), aH, aM, 0, 0).getTime();
 
-        // If alarm was created/edited AFTER today's alarm minute already passed (diffAlarmMin > 0),
-        // it is meant for tomorrow, not a missed sleep alarm from earlier today!
-        const alarmTodayEpoch = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          aH,
-          aM,
-          59,
-          999
-        ).getTime();
-        const wasCreatedAfterAlarmTimeToday =
-          diffAlarmMin > 0 && Number(alarm.createdAt) > alarmTodayEpoch;
-
-        if (diffAlarmMin >= 0 && diffAlarmMin < 5 && !wasCreatedAfterAlarmTimeToday) {
-          const alarmKey = `${todayKey}_alarm_${alarm.id}_${alarm.time}_${alarm.createdAt || 0}`;
+        if (diffAlarmMin >= 0 && diffAlarmMin <= 2) {
+          const alarmKey = `${todayKey}_alarm_${alarm.id}_${alarm.time}`;
           if (!notifiedAlarmsRef.current[alarmKey]) {
             notifiedAlarmsRef.current[alarmKey] = true;
+            try {
+              localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
+            } catch {}
+
+            // Only ring inside the app if the user was ALREADY inside the app when the alarm minute started
+            // (or created the alarm inside the app during this minute), AND the minute wasn't already silenced outside!
+            const createdDuringThisMinute = alarm.createdAt != null && alarm.createdAt >= alarmMinuteStartMs;
+            const wasInsideWhenAlarmStarted =
+              appVisibleSinceRef.current <= alarmMinuteStartMs + 3000 || createdDuringThisMinute;
+
+            if (diffAlarmMin > 0 || !wasInsideWhenAlarmStarted || audioAlerts.isMinuteSilenced(alarmTime24)) {
+              return;
+            }
 
             // Start playing alarm audio immediately
             audioAlerts.playAlarm(alarm.sound, alarm.selectedVoice || 'makkah');
@@ -777,11 +1418,22 @@ export default function App() {
         if (!Number.isFinite(tH) || !Number.isFinite(tM)) return;
         const todoTotalMin = tH * 60 + tM;
         const diffTodoMin = currentTotalMin - todoTotalMin;
+        const todoTime24 = `${String(tH).padStart(2, '0')}:${String(tM).padStart(2, '0')}`;
+        const todoMinuteStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), tH, tM, 0, 0).getTime();
 
-        if (diffTodoMin === 0) {
+        if (diffTodoMin >= 0 && diffTodoMin < 5) {
           const todoKey = `${todayKey}_todo_${todo.id}_${todo.dueTime}`;
           if (!notifiedAlarmsRef.current[todoKey]) {
             notifiedAlarmsRef.current[todoKey] = true;
+            try {
+              localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
+            } catch {}
+
+            const wasInsideWhenTodoStarted = appVisibleSinceRef.current <= todoMinuteStartMs + 3000;
+            if (diffTodoMin > 0 || !wasInsideWhenTodoStarted || audioAlerts.isMinuteSilenced(todoTime24)) {
+              return;
+            }
+
             const todoAlarm: CustomAlarm = {
               id: `todo_alarm_${todo.id}`,
               time: todo.dueTime,
@@ -805,27 +1457,61 @@ export default function App() {
     // Run initial check immediately
     checkScheduleAndAlarms();
 
-    const interval = setInterval(checkScheduleAndAlarms, 2000);
+    const interval = setInterval(checkScheduleAndAlarms, 1500);
 
-    // Re-check immediately when screen wakes or tab becomes visible
-    const handleWakeOrFocus = () => {
-      audioAlerts.unlockAudio();
-      checkScheduleAndAlarms();
+    // Un-throttled Background Web Worker Clock so minimized Desktop tabs never miss Adhan time
+    let bgWorker: Worker | null = null;
+    let bgWorkerUrl: string | null = null;
+    try {
+      const workerCode = `setInterval(function(){ postMessage('tick'); }, 1500);`;
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      bgWorkerUrl = URL.createObjectURL(blob);
+      bgWorker = new Worker(bgWorkerUrl);
+      bgWorker.onmessage = () => {
+        checkScheduleAndAlarms();
+      };
+    } catch {}
+
+    // Handle visibility transitions: when leaving the app, silence in-app modals;
+    // when returning from outside the app, mark current-window alarms as handled so they NEVER re-trigger!
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        isAppHiddenRef.current = true;
+        markCurrentWindowAsHandledSilently(new Date());
+      } else {
+        const now = new Date();
+        isAppHiddenRef.current = false;
+        appVisibleSinceRef.current = now.getTime();
+        lastVisibleTickRef.current = now.getTime();
+        markCurrentWindowAsHandledSilently(now);
+        setActiveRingingAlarm(null);
+        setActiveAdhaanOverlayPrayer(null);
+        audioAlerts.stopAlarm();
+      }
     };
 
-    document.addEventListener('visibilitychange', handleWakeOrFocus);
-    window.addEventListener('focus', handleWakeOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleWakeOrFocus);
-      window.removeEventListener('focus', handleWakeOrFocus);
+      if (bgWorker) {
+        try {
+          bgWorker.terminate();
+        } catch {}
+      }
+      if (bgWorkerUrl) {
+        try {
+          URL.revokeObjectURL(bgWorkerUrl);
+        } catch {}
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [todayKey, settings, todos]);
 
   // Snooze handler for Adhan
   const handleSnooze = useCallback((minutes: number, prayer: PrayerName) => {
     setActiveAdhaanOverlayPrayer(null);
+    audioAlerts.stopAlarm();
     if (snoozeTimeoutRef.current) clearTimeout(snoozeTimeoutRef.current);
 
     const message = `⏰ Xusuusin: Adhkaarta ${PRAYER_SOMALI_LABELS[prayer]} waxaa dib laguu soo xusuusin doonaa ${minutes} daqiiqo ka dib.`;
@@ -1419,21 +2105,28 @@ export default function App() {
   );
 
   // Reset all data
-  const handleResetAllData = useCallback(() => {
+  const handleResetAllData = useCallback(async () => {
     if (
       window.confirm(
         'DIGNIIN: Ma hubtaa inaad tirtirto dhammaan xogta salaadaha, diiwaanka, iyo ducooyinka? Tallaabadan dib looma celin karo.'
       )
     ) {
-      localStorage.clear();
+      const activeUid = currentUser?.uid;
       const emptyDays = { [todayKey]: { ...createEmptyDay(), updatedAt: Date.now() } };
       const freshDuas = loadCustomDuas();
       const freshSettings = { ...loadSettings(), updatedAt: Date.now() };
       const freshTodos = INITIAL_TODOS.map((t) => ({ ...t, completed: false }));
+
+      saveAllDays(emptyDays, activeUid);
+      saveSettings(freshSettings, activeUid);
+      saveAllTodos(freshTodos, activeUid);
+      saveCustomDuas(freshDuas, activeUid);
+
       setAllDays(emptyDays);
       setCustomDuas(freshDuas);
       setSettings(freshSettings);
       setTodos(freshTodos);
+
       pushSyncToServer({
         scope: activeSyncScope,
         resetAll: true,
@@ -1443,10 +2136,22 @@ export default function App() {
         todos: freshTodos,
         customDuas: freshDuas,
       });
+
+      if (currentUser) {
+        await resetUserCloudDataInFirestore(
+          currentUser.uid,
+          todayKey,
+          emptyDays[todayKey],
+          freshSettings,
+          freshTodos,
+          freshDuas
+        ).catch(console.error);
+      }
+
       setSnoozeMessage('🗑️ Dhammaan xogtii dib baa loo bilaabay.');
       setTimeout(() => setSnoozeMessage(null), 4000);
     }
-  }, [activeSyncScope, todayKey]);
+  }, [activeSyncScope, currentUser, todayKey]);
 
   // Handle user sign out with complete zero-reset of personal logs
   const handleLogout = useCallback(() => {
@@ -1483,7 +2188,15 @@ export default function App() {
       <div
         data-rn-breakpoint={rnDimensions.breakpoint}
         data-rn-device={rnDimensions.deviceType}
-        className="min-h-screen bg-gradient-to-br from-[#051419] via-[#071c23] to-[#041014] text-slate-100 flex flex-col selection:bg-teal-500/30 selection:text-teal-200 pb-safe"
+        data-app-theme={settings.appTheme || 'emerald'}
+        data-arabic-scale={settings.arabicFontScale || 'normal'}
+        className={`min-h-screen text-slate-100 flex flex-col selection:bg-teal-500/30 selection:text-teal-200 pb-safe ${
+          settings.appTheme === 'oled'
+            ? 'bg-black'
+            : settings.appTheme === 'gold'
+            ? 'bg-gradient-to-br from-[#120e05] via-[#171207] to-[#0a0803]'
+            : 'bg-gradient-to-br from-[#051419] via-[#071c23] to-[#041014]'
+        }`}
       >
       {/* Decorative ambient radial glows */}
       <div className="fixed top-0 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-[120px] pointer-events-none" />
@@ -1509,14 +2222,91 @@ export default function App() {
         onOpenClockAlarm={() => {
           setAdhanInitialSubTab('clock_alarm');
           setAdhanSubTabTrigger((prev) => prev + 1);
-          setCurrentTab('adhan');
+          setCurrentTab('alarm');
         }}
         onOpenAuthModal={() => setShowAuthModal(true)}
         onOpenMobileInstall={() => setShowMobileInstall(true)}
         onOpenNotificationModal={() => setShowNotificationPrompt(true)}
         onOpenStreakModal={() => setShowStreakModal(true)}
         onOpenAllSectionsModal={() => setShowAllSectionsModal(true)}
+        onOpenHelpModal={() => setShowHelpModal(true)}
+        onOpenAdminDashboard={() => setShowAdminDashboard(true)}
       />
+
+      {/* Tablet Left Rail & Desktop Pro Sidebar (Hidden on Mobile <768px) */}
+      <DesktopSidebar
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        onOpenAllSections={() => setShowAllSectionsModal(true)}
+        settings={settings}
+        streakDays={streakStats.currentAllStreak}
+        todayPrayedCount={
+          currentDayData.isExcusedDay
+            ? 5
+            : PRAYER_ORDER.filter((p) => {
+                const st = currentDayData.salaah[p]?.status;
+                return st === 'mosque' || st === 'home' || st === 'early_home' || st === 'excused';
+              }).length
+        }
+        syncStatus={syncStatus}
+        isReloading={reloadPhase !== 'hidden'}
+        onManualSync={handleManualSync}
+      />
+
+      {/* Offline Mode & Network Connection Status Banner */}
+      <OfflineBanner />
+
+      {/* Broadcast Announcements from Admin */}
+      {activeAnnouncements
+        .filter((ann) => {
+          if (dismissedAnnouncements.includes(ann.id)) return false;
+          if (ann.targetAudience === 'male' && settings.gender !== 'male') return false;
+          if (ann.targetAudience === 'female' && settings.gender !== 'female') return false;
+          return true;
+        })
+        .map((ann) => {
+          const typeClasses: Record<string, string> = {
+            info: 'from-blue-950/95 via-slate-900 to-slate-950 border-blue-500/40 text-blue-200',
+            jumco: 'from-emerald-950/95 via-teal-950 to-slate-950 border-emerald-500/40 text-emerald-200',
+            ramadan: 'from-amber-950/95 via-slate-900 to-slate-950 border-amber-500/40 text-amber-200',
+            alert: 'from-red-950/95 via-slate-900 to-slate-950 border-red-500/40 text-red-200',
+            update: 'from-purple-950/95 via-slate-900 to-slate-950 border-purple-500/40 text-purple-200',
+          };
+          return (
+            <div key={ann.id} className="max-w-4xl mx-auto w-full px-3 sm:px-4 pt-3">
+              <div
+                className={`p-3.5 sm:p-4 rounded-2xl border bg-gradient-to-r shadow-xl flex items-start justify-between gap-3 animate-in fade-in slide-in-from-top-3 ${
+                  typeClasses[ann.type] || typeClasses.info
+                }`}
+              >
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">
+                      {ann.type === 'jumco'
+                        ? '🕌'
+                        : ann.type === 'ramadan'
+                        ? '🌙'
+                        : ann.type === 'alert'
+                        ? '⚠️'
+                        : ann.type === 'update'
+                        ? '✨'
+                        : '📢'}
+                    </span>
+                    <h4 className="font-black text-sm text-white tracking-tight">{ann.title}</h4>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">{ann.content}</p>
+                </div>
+                <button
+                  onClick={() => setDismissedAnnouncements((prev) => [...prev, ann.id])}
+                  className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition shrink-0 cursor-pointer"
+                  title="Xir wargelintan"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          );
+        })}
 
       {/* Account Action Notification Toast (Logout / Login restored) */}
       {accountActionAlert && (
@@ -1646,10 +2436,14 @@ export default function App() {
           isOpen={true}
           isSisterMode={settings.gender === 'female'}
           adhanVoice={settings.prayerVoices?.[activeAdhaanOverlayPrayer] || settings.adhanVoice}
-          onClose={() => setActiveAdhaanOverlayPrayer(null)}
+          onClose={() => {
+            audioAlerts.stopAlarm();
+            setActiveAdhaanOverlayPrayer(null);
+          }}
           onMarkPrayed={handleMarkPrayed}
           onSnooze={handleSnooze}
           onComplete={() => {
+            audioAlerts.stopAlarm();
             handleMarkPrayed(activeAdhaanOverlayPrayer, settings.gender === 'female' ? 'early_home' : 'mosque');
           }}
         />
@@ -1690,9 +2484,25 @@ export default function App() {
               prayerTimes={prayerTimes}
               onUpdateSettings={handleUpdateSettings}
               onTriggerAdhaanOverlay={(prayer) => setActiveAdhaanOverlayPrayer(prayer)}
+              onOpenInstallApp={() => setShowMobileInstall(true)}
               cityName={settings.cityName}
-              initialSubTab={adhanInitialSubTab}
+              initialSubTab="prayers"
               subTabTrigger={adhanSubTabTrigger}
+              sectionMode="adhan"
+            />
+          )}
+
+          {currentTab === 'alarm' && (
+            <AdhanView
+              settings={settings}
+              prayerTimes={prayerTimes}
+              onUpdateSettings={handleUpdateSettings}
+              onTriggerAdhaanOverlay={(prayer) => setActiveAdhaanOverlayPrayer(prayer)}
+              onOpenInstallApp={() => setShowMobileInstall(true)}
+              cityName={settings.cityName}
+              initialSubTab="clock_alarm"
+              subTabTrigger={adhanSubTabTrigger}
+              sectionMode="alarm"
             />
           )}
 
@@ -1757,6 +2567,9 @@ export default function App() {
                   ? handleApplyUserQuranJourney
                   : undefined
               }
+              onOpenReaderModal={(surahNum) =>
+                setQuranReaderState({ isOpen: true, surahNumber: surahNum })
+              }
             />
           )}
 
@@ -1791,20 +2604,32 @@ export default function App() {
                 const importedDays = loadAllDays(currentUser?.uid);
                 const importedDuas = loadCustomDuas(currentUser?.uid);
                 const importedSettings = loadSettings(currentUser?.uid);
+                const importedTodos = loadAllTodos(currentUser?.uid);
                 setAllDays(importedDays);
                 setCustomDuas(importedDuas);
                 setSettings(importedSettings);
+                setTodos(importedTodos);
                 pushSyncToServer({
                   scope: activeSyncScope,
                   isExplicitAction: true,
                   days: importedDays,
                   settings: importedSettings,
                   customDuas: importedDuas,
+                  todos: importedTodos,
                 });
+                if (currentUser) {
+                  saveSettingsToFirestore(currentUser.uid, importedSettings).catch(console.error);
+                  saveTodosToFirestore(currentUser.uid, importedTodos).catch(console.error);
+                  saveCustomDuasToFirestore(currentUser.uid, importedDuas).catch(console.error);
+                  Object.entries(importedDays).forEach(([dKey, dVal]) => {
+                    saveDayToFirestore(currentUser.uid, dKey, dVal).catch(console.error);
+                  });
+                }
               }}
               onResetAllData={handleResetAllData}
               currentUser={currentUser}
               onOpenAuthModal={() => setShowAuthModal(true)}
+              onOpenAdminDashboard={() => setShowAdminDashboard(true)}
             />
           )}
         </Suspense>
@@ -1813,13 +2638,7 @@ export default function App() {
       {/* Cloud Authentication & Database Sync Modal */}
       <AuthModal
         isOpen={showAuthModal}
-        onClose={() => {
-          if (isFirstVisitPrompt) {
-            handleDismissFirstVisit();
-          } else {
-            setShowAuthModal(false);
-          }
-        }}
+        onClose={() => setShowAuthModal(false)}
         currentUser={currentUser}
         userProfile={userProfile}
         currentGender={settings.gender}
@@ -1829,53 +2648,15 @@ export default function App() {
             localStorage.setItem(`tuko_gender_confirmed_${currentUser.uid}`, gender);
           }
         }}
-        isFirstVisitPrompt={isFirstVisitPrompt && !currentUser}
-        onSkipFirstVisit={handleDismissFirstVisit}
+        isFirstVisitPrompt={false}
+        onSkipFirstVisit={() => setShowAuthModal(false)}
         onLoginSuccess={(user, profile, selectedGender, isNewRegistration) => {
           handleDismissFirstVisit();
-          setActiveStorageUser(user.uid);
-          setCurrentUser(user);
           if (profile) setUserProfile(profile);
-          if (selectedGender) {
+          if (isNewRegistration && selectedGender) {
             localStorage.setItem(`tuko_gender_confirmed_${user.uid}`, selectedGender);
           }
-          const isAdmin = user.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-          const newScope = isAdmin ? 'default_shared' : `user_${user.uid}`;
-
-          if (isNewRegistration) {
-            const zeroDay = { ...createEmptyDay(), updatedAt: Date.now() };
-            const freshDays = { [todayKey]: zeroDay };
-            setAllDays(freshDays);
-            saveAllDays(freshDays, user.uid);
-            saveDayToFirestore(user.uid, todayKey, zeroDay).catch(console.error);
-
-            const freshSettings: AppSettings = {
-              ...DEFAULT_SETTINGS,
-              gender: selectedGender || 'male',
-              genderConfirmed: true,
-              startingStreakOffset: 0,
-              useCustomSchedule: true,
-              customSchedule: { ...DEFAULT_USER_PRAYER_SCHEDULE },
-              updatedAt: Date.now(),
-            };
-            setSettings(freshSettings);
-            saveSettings(freshSettings, user.uid);
-            saveSettingsToFirestore(user.uid, freshSettings).catch(console.error);
-
-            pushSyncToServer({
-              scope: newScope,
-              resetAll: true,
-              isExplicitAction: true,
-              days: freshDays,
-              settings: freshSettings,
-            });
-
-            if (selectedGender) {
-              updateUserProfile(user.uid, { gender: selectedGender }).catch(console.error);
-            }
-          } else if (selectedGender) {
-            handleUpdateSettings({ gender: selectedGender, genderConfirmed: true });
-          }
+          restoreAndSyncUserAccount(user, { isNewRegistration, selectedGender });
         }}
         onLogoutSuccess={() => {
           handleLogout();
@@ -1918,17 +2699,57 @@ export default function App() {
         onSelectTab={(tabId) => setCurrentTab(tabId)}
         onOpenAuthModal={() => setShowAuthModal(true)}
         currentUserEmail={currentUser?.email}
+        favoriteIds={favoriteSectionIds}
+        onUpdateFavorites={handleUpdateFavorites}
       />
 
-      {/* Footer */}
-      <footer className="w-full border-t border-teal-500/10 py-6 text-center text-xs text-slate-400 relative z-10 backdrop-blur-md">
-        <p>
-          Tuko – Dhawr-Salaad &amp; Adkaar •{' '}
-          {currentUser
-            ? `Ku xiran koontada: ${currentUser.email} (Firebase Cloud Database)`
-            : 'Xogtaadu waxay si sugan ugu kaydsantahay qalabkaaga iyo Cloud Database-ka'}
-        </p>
-      </footer>
+      {/* In-App Help & How-To Guide Modal */}
+      <HelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        onOpenMobileInstall={() => setShowMobileInstall(true)}
+        onOpenNotificationModal={() => setShowNotificationPrompt(true)}
+      />
+
+      {/* Admin Dashboard Console */}
+      {showAdminDashboard && (
+        <AdminDashboardView
+          currentUser={currentUser}
+          userProfile={userProfile}
+          onClose={() => setShowAdminDashboard(false)}
+        />
+      )}
+
+      {/* First-Time Visitor Friendly Onboarding Flow */}
+      <OnboardingFlow
+        isOpen={showOnboarding}
+        onComplete={handleCompleteOnboarding}
+        onOpenAuth={() => setShowAuthModal(true)}
+        currentCityId={settings.cityId}
+        currentGender={settings.gender}
+      />
+
+      {/* Global Quran Reader & Floating Background Audio Mini-Player */}
+      <QuranReaderModal
+        isOpen={quranReaderState.isOpen}
+        initialSurahNumber={quranReaderState.surahNumber}
+        onClose={() => setQuranReaderState((prev) => ({ ...prev, isOpen: false }))}
+        onReopen={() => setQuranReaderState((prev) => ({ ...prev, isOpen: true }))}
+        arabicFontScale={settings.arabicFontScale}
+        onAddPagesRead={(pages) => {
+          const cur = Number(currentDayData.quran) || 0;
+          handleUpdateQuran(cur + pages);
+        }}
+      />
+
+      {/* Mobile Touch Bottom Navigation Bar (Dynamic 5-Tab Bar based on user-pinned sections) */}
+      <BottomNav
+        currentTab={currentTab}
+        onTabChange={(tabId) => setCurrentTab(tabId)}
+        onOpenAllSections={() => setShowAllSectionsModal(true)}
+        favoriteIds={favoriteSectionIds}
+        isAllSectionsOpen={showAllSectionsModal}
+      />
       </div>
     </LanguageProvider>
   );

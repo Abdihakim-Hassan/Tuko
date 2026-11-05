@@ -21,9 +21,12 @@ import {
   Trash2,
   Headphones,
   Volume2,
+  Download,
 } from 'lucide-react';
 import { QuranReaderModal } from './QuranReaderModal';
+import { QuranOfflineModal } from './QuranOfflineModal';
 import { AppSettings, DayData } from '../types';
+import { ensureAll114SurahsCachedOffline } from '../utils/quranAudioService';
 import {
   QURAN_SURAHS,
   DAILY_RECOMMENDED_SURAHS,
@@ -43,6 +46,7 @@ interface QuranViewProps {
   onToggleSurah: (surahNumber: number, pageDelta?: number) => void;
   onSetSurahs: (surahs: number[]) => void;
   onApplyUserQuranJourney?: () => void;
+  onOpenReaderModal?: (surahNumber: number) => void;
 }
 
 const QURAN_TOTAL_PAGES = 604;
@@ -58,6 +62,7 @@ export const QuranView: React.FC<QuranViewProps> = ({
   onToggleSurah,
   onSetSurahs,
   onApplyUserQuranJourney,
+  onOpenReaderModal,
 }) => {
   const [customInput, setCustomInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,10 +88,32 @@ export const QuranView: React.FC<QuranViewProps> = ({
   const [previousPagesState, setPreviousPagesState] = useState<number | null>(null);
   const [isReaderOpen, setIsReaderOpen] = useState(false);
   const [readerSurahNumber, setReaderSurahNumber] = useState(1);
+  const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
+  const [offlineCachedCount, setOfflineCachedCount] = useState<number>(() => {
+    try {
+      return localStorage.getItem('tuko_all_114_quran_offline_ready') === 'true' ? 114 : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    let active = true;
+    ensureAll114SurahsCachedOffline((cached) => {
+      if (active) setOfflineCachedCount(cached);
+    }).catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleOpenReader = (surahNumber: number = 1) => {
-    setReaderSurahNumber(surahNumber);
-    setIsReaderOpen(true);
+    if (onOpenReaderModal) {
+      onOpenReaderModal(surahNumber);
+    } else {
+      setReaderSurahNumber(surahNumber);
+      setIsReaderOpen(true);
+    }
   };
 
   // Read Surahs for today (1-114)
@@ -349,366 +376,69 @@ export const QuranView: React.FC<QuranViewProps> = ({
       <div className="p-4 sm:p-6 md:p-8 rounded-3xl bg-gradient-to-br from-[#0c2738] via-[#093245] to-[#061c27] border border-teal-500/30 shadow-2xl relative overflow-hidden">
         {/* Subtle decorative glow */}
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-teal-400 p-[2px] shadow-lg shadow-teal-500/20 shrink-0">
-                <div className="w-full h-full bg-[#0a1e28] rounded-[14px] flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-amber-300" />
-                </div>
+        <div className="relative z-10 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-teal-400 p-[2px] shadow-md shrink-0">
+              <div className="w-full h-full bg-[#0a1e28] rounded-[14px] flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-amber-300" />
               </div>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
-                Diiwaanka Qur'aanka Kariimka
-              </h2>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Daba-gal bogagga aad maalin walba akhriso, tirtir ama jar waxaad ku dartay, arag tirada
-              rasmiga ah ee bogagga suurad kasta, oo gaadh Khatmooyin barakaysan.
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight truncate">
+                  Qur'aanka Kariimka
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setIsOfflineModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/35 text-emerald-300 text-[10px] font-bold transition active:scale-95 cursor-pointer shadow-sm"
+                  title="Guji si aad codadka iyo suuradaha hal-mar offline ugu diyaarsato"
+                >
+                  <Download className="w-3 h-3 text-emerald-400" />
+                  <span>
+                    {offlineCachedCount >= 114
+                      ? '114/114 Offline'
+                      : `Offline ${offlineCachedCount}/114`}
+                  </span>
+                  <span className="text-[9px] px-1 rounded bg-teal-400/20 text-teal-200">
+                    Hal-Mar Diyaari ⚡
+                  </span>
+                </button>
+              </div>
+              <p className="text-[11px] text-teal-300/85 truncate">
+                Khatmada: {currentCyclePages}/604 bog ({cyclePercent}%) • Qoraal & Macne Waa Offline
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {readingStreak > 0 && (
-              <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-400/30 text-amber-300 shadow-md">
-                <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400 animate-bounce" />
-                <div>
-                  <div className="text-[10px] uppercase font-bold tracking-wider text-amber-300/80">
-                    Taxanaha
-                  </div>
-                  <div className="text-sm sm:text-base font-black leading-none">{readingStreak} Maalmood</div>
-                </div>
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/35 text-amber-300 text-xs font-black">
+                <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400 shrink-0" />
+                <span>{readingStreak}d</span>
               </div>
             )}
 
             <button
               onClick={() => setShowOpinionModal(true)}
-              className="px-3.5 py-2 rounded-2xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/30 text-teal-200 text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/30 text-teal-200 text-xs font-bold transition flex items-center gap-1 active:scale-95 cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Ra'yi &amp; Talo</span>
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Talo</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Top 4 Stats Cards - Responsive Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Today's Pages */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#0c2530] to-[#071c24] border border-teal-500/25 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-teal-300">
-              Bogagga Maanta
-            </span>
-            <BookMarked className="w-4 h-4 text-teal-400 opacity-60" />
-          </div>
-          <div className="my-2 flex items-center justify-between">
-            <div>
-              <div className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono text-cyan-300">
-                {todayPages}
-              </div>
-              <span className="text-[11px] text-slate-400">
-                {todayPages} bog ayaa la akhriyay maanta
-              </span>
-            </div>
-            {/* Quick +/- stepper buttons */}
-            <div className="flex flex-col gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleAddPages(1)}
-                className="w-8 h-8 rounded-xl bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/40 text-teal-200 font-black text-base flex items-center justify-center transition active:scale-90 shadow cursor-pointer"
-                title="Ku dar +1 bog"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSubtractPages(1)}
-                className="w-8 h-8 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-black text-base flex items-center justify-center transition active:scale-90 shadow cursor-pointer"
-                title="Ka jar -1 bog"
-              >
-                -
-              </button>
-            </div>
-          </div>
-          <div className="text-[10px] text-teal-400/80 font-medium">Hadafka maanta: 20 bog</div>
-        </div>
-
-        {/* Today's Surahs Count */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#0d2a20] to-[#071d16] border border-emerald-500/25 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-emerald-300">
-              Suuradaha Maanta
-            </span>
-            <CheckCheck className="w-4 h-4 text-emerald-400 opacity-60" />
-          </div>
-          <div className="my-2">
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono text-emerald-300">
-              {todaySurahs.length}
-              <span className="text-sm sm:text-base font-normal text-emerald-400/60 font-sans">
-                {' '}
-                / 114
-              </span>
-            </div>
-            <span className="text-[11px] text-amber-300 font-bold block mt-0.5">
-              {todaySurahs.length > 0
-                ? `⭐ ${todaySurahs.length} Suuradood maanta`
-                : 'Dooro suuradaha aad maanta akhriday'}
-            </span>
-          </div>
-          <div className="text-[10px] text-emerald-400/80 font-medium">
-            {todaySurahs.length} suuradood ayaa la dhammeeyay maanta
-          </div>
-        </div>
-
-        {/* Current Khatmah Cycle */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#1e2311] via-[#212d14] to-[#141d0b] border border-amber-500/25 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-amber-300">
-              Khatmada Socota
-            </span>
-            <Compass className="w-4 h-4 text-amber-400 opacity-60" />
-          </div>
-          <div className="my-2 flex items-center justify-between">
-            <div>
-              <div className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono text-amber-300">
-                {currentCyclePages}
-                <span className="text-xs sm:text-sm font-normal text-amber-400/60">
-                  {' '}
-                  / {QURAN_TOTAL_PAGES}
-                </span>
-              </div>
-              <span className="text-[11px] text-slate-400">{cyclePercent}% Dhammaystiran</span>
-            </div>
-            {/* Direct +/- buttons on Khatmah card */}
-            <div className="flex flex-col gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => handleAddPages(1, 'Khatmada')}
-                className="w-8 h-8 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-amber-200 font-black text-base flex items-center justify-center transition active:scale-90 shadow cursor-pointer"
-                title="Ku dar +1 bog Khatmada socota"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSubtractPages(1, 'Khatmada')}
-                className="w-8 h-8 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-black text-base flex items-center justify-center transition active:scale-90 shadow cursor-pointer"
-                title="Ka jar -1 bog Khatmada socota"
-              >
-                -
-              </button>
-            </div>
-          </div>
-          <div className="w-full bg-amber-950/60 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="bg-amber-400 h-full rounded-full transition-all duration-500"
-              style={{ width: `${cyclePercent}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Total Surahs Read All-Time (User: 66 - Suuradaha 49-114) */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#1a122e] to-[#120a22] border border-purple-500/25 shadow-lg flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-purple-300">
-              Suuradaha Guud ee La Akhriyay
-            </span>
-            <Trophy className="w-4 h-4 text-purple-400 opacity-60" />
-          </div>
-          <div className="my-2">
-            <div className="text-3xl sm:text-4xl lg:text-5xl font-black font-mono text-purple-300 flex items-center gap-2">
-              <span>{allTimeSurahs.length}</span>
-              <span className="text-xs sm:text-sm font-normal text-purple-400/60 font-sans">
-                / 114
-              </span>
-              <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400 shrink-0 ml-auto" />
-            </div>
-            <span className="text-[11px] text-amber-300 font-bold block mt-0.5">
-              {allTimeSurahs.length === 66
-                ? '⭐ 66 Suuradood (49 ilaa 114)'
-                : `${allTimeSurahs.length} suuradood la dhammeeyay`}
-            </span>
-          </div>
-          <div className="text-[10px] text-purple-300/80 font-medium">
-            Alxamdulillaah • Guud ahaan: {totalPagesAllTime} bog
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Bar towards current Khatmah */}
-      <div className="p-4 sm:p-6 rounded-3xl bg-slate-900/70 border border-white/10 backdrop-blur-md shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-bold text-slate-300 mb-2.5">
-          <span>Heerka Khatmada Hadda: {currentCyclePages} ee 604 bog</span>
-          <span className="text-teal-300 bg-teal-950/60 px-2.5 py-0.5 rounded-full border border-teal-500/30 self-start sm:self-auto">
-            {cyclePercent}% Dhammaystiran ({604 - currentCyclePages} bog ayaa dhiman)
-          </span>
-        </div>
-        <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden p-[1px] shadow-inner">
-          <div
-            className="h-full bg-gradient-to-r from-amber-400 via-emerald-400 to-teal-400 rounded-full transition-all duration-500 shadow-sm"
-            style={{ width: `${cyclePercent}%` }}
-          />
-        </div>
-        <div className="flex justify-between items-center text-[10px] sm:text-xs text-slate-400 mt-2">
-          <span>Bogga 1 (Al-Faatixa)</span>
-          <span className="hidden sm:inline">Bogga 302 (Al-Kahf / Dhexe)</span>
-          <span>Bogga 604 (An-Naas)</span>
-        </div>
-      </div>
-
-      {/* ============================================================== */}
-      {/* 30-DAY KHATM PLANNER (JADWALKA KHATINKA QUR'AANKA SALAAD KASTA) */}
-      {/* ============================================================== */}
-      <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092b38] to-[#061821] border border-amber-500/35 shadow-2xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
-          <div>
-            <div className="flex items-center gap-2">
-              <Compass className="w-5 h-5 text-amber-300" />
-              <h3 className="text-base sm:text-lg font-black text-white">
-                Jadwalka Khatinka Qur'aanka (30-Day Khatm Planner)
-              </h3>
-            </div>
-            <p className="text-xs text-slate-300 mt-1">
-              Dooro muddada aad rabto inaad ku dhammayso Qur'aanka Kariimka (604 bog) — xisaabiyuhu wuxuu kuu sheegayaa inta bog ee aad salaad kasta ka dib akhrinayso!
-            </p>
-          </div>
-
-          {/* Goal Days Selector */}
-          <div className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-2xl border border-white/10 self-start sm:self-auto shrink-0">
-            {[
-              { days: 15, label: '15 Maalmood' },
-              { days: 30, label: '30 Maalmood (Bil)' },
-              { days: 60, label: '60 Maalmood' },
-              { days: 90, label: '90 Maalmood' },
-            ].map((plan) => (
-              <button
-                key={plan.days}
-                type="button"
-                onClick={() => handleSelectKhatmDays(plan.days)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition cursor-pointer ${
-                  khatmDaysGoal === plan.days
-                    ? 'bg-gradient-to-r from-amber-400 to-teal-400 text-slate-950 shadow-md'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                {plan.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {(() => {
-          const pagesPerDayGoal = Math.ceil(QURAN_TOTAL_PAGES / khatmDaysGoal);
-          const pagesPerPrayerGoal = Math.max(1, Math.ceil(pagesPerDayGoal / 5));
-          const pagesRemainingInKhatm = Math.max(0, QURAN_TOTAL_PAGES - currentCyclePages);
-          const daysLeftAtTargetPace = Math.ceil(pagesRemainingInKhatm / pagesPerDayGoal);
-          const todayGoalMet = todayPages >= pagesPerDayGoal;
-
-          return (
-            <div className="space-y-4">
-              {/* Summary Metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-amber-500/25">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
-                    Hadafka Maalintii
-                  </span>
-                  <div className="text-2xl font-black font-mono text-white mt-1">
-                    {pagesPerDayGoal} <span className="text-xs font-normal text-slate-400">bog</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-teal-500/25">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300 block">
-                    Salaad Kasta Ka Dib
-                  </span>
-                  <div className="text-2xl font-black font-mono text-teal-300 mt-1">
-                    {pagesPerPrayerGoal} <span className="text-xs font-normal text-slate-400">bog</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-cyan-500/25">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300 block">
-                    Maanta La Akhriyay
-                  </span>
-                  <div className="text-2xl font-black font-mono text-cyan-300 mt-1">
-                    {todayPages} / {pagesPerDayGoal}
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-emerald-500/25">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 block">
-                    Maalmaha Kuugu Haray
-                  </span>
-                  <div className="text-2xl font-black font-mono text-emerald-300 mt-1">
-                    {daysLeftAtTargetPace} <span className="text-xs font-normal text-slate-400">maalmood</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 5 Daily Prayers Breakdown with 1-Click Log */}
-              <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <span className="text-xs font-extrabold text-teal-200">
-                    🕌 Qorshaha 5-ta Salaadood ee Maanta (Riix salaad kasta markaad akhriso {pagesPerPrayerGoal} bog):
-                  </span>
-                  {todayGoalMet && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-black">
-                      🎉 Hadafkii Maanta Waa La Gaaray!
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  {[
-                    { name: 'Subax (Fajr)', icon: '🌅', slot: 1 },
-                    { name: 'Duhur', icon: '🌞', slot: 2 },
-                    { name: 'Casar', icon: '🌤️', slot: 3 },
-                    { name: 'Maqrib', icon: '🌇', slot: 4 },
-                    { name: 'Cishe', icon: '🌙', slot: 5 },
-                  ].map((item) => {
-                    const slotDone = todayPages >= item.slot * pagesPerPrayerGoal;
-                    return (
-                      <button
-                        key={item.name}
-                        type="button"
-                        onClick={() => handleAddPages(pagesPerPrayerGoal, `Wirdiga ${item.name}`)}
-                        className={`p-3 rounded-2xl border text-center transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-between gap-1.5 ${
-                          slotDone
-                            ? 'bg-gradient-to-br from-emerald-600/40 to-teal-700/40 border-emerald-400/60 text-white shadow-md'
-                            : 'bg-slate-900/90 hover:bg-slate-800 border-white/10 text-slate-200'
-                        }`}
-                      >
-                        <span className="text-base">{item.icon}</span>
-                        <span className="text-xs font-extrabold">{item.name}</span>
-                        <span
-                          className={`text-[11px] font-black px-2 py-0.5 rounded-lg ${
-                            slotDone
-                              ? 'bg-emerald-400 text-slate-950'
-                              : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                          }`}
-                        >
-                          {slotDone ? `✓ +${pagesPerPrayerGoal} Bog` : `+${pagesPerPrayerGoal} Bog`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-
       {/* Action Feedback Banner */}
       {lastActionMessage && (
-        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-teal-950 to-emerald-950 border border-teal-400/40 text-teal-200 text-xs sm:text-sm font-bold flex items-center justify-between gap-2 shadow-lg animate-in fade-in slide-in-from-top-2">
+        <div className="p-3 rounded-2xl bg-gradient-to-r from-teal-950 to-emerald-950 border border-teal-400/40 text-teal-200 text-xs font-bold flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
           <span>{lastActionMessage}</span>
           {previousPagesState !== null && (
             <button
               onClick={handleUndo}
-              className="px-2.5 py-1 rounded-xl bg-teal-400 text-slate-950 hover:bg-teal-300 font-extrabold text-xs transition flex items-center gap-1 shrink-0"
+              className="px-2.5 py-1 rounded-xl bg-teal-400 text-slate-950 hover:bg-teal-300 font-extrabold text-xs transition flex items-center gap-1 shrink-0 cursor-pointer"
             >
               <Undo2 className="w-3.5 h-3.5" />
               <span>Ka noqo</span>
@@ -717,386 +447,234 @@ export const QuranView: React.FC<QuranViewProps> = ({
         </div>
       )}
 
-      {/* ============================================================== */}
-      {/* ADD & SUBTRACT / DELETE PAGES CONTROLS (TIRTIRID & JARID BOGAGGA) */}
-      {/* ============================================================== */}
-      <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0a232d] to-[#071921] border border-teal-500/25 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-cyan-300" />
-            <h3 className="text-sm font-extrabold uppercase tracking-wider text-teal-300">
-              Maamul Bogagga Maanta (Ku dar • Ka jar • Tirtir)
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {previousPagesState !== null && (
-              <button
-                onClick={handleUndo}
-                className="text-xs text-teal-300 hover:text-teal-100 flex items-center gap-1 transition px-2.5 py-1 rounded-xl bg-teal-500/10 border border-teal-500/20"
-                title="Dib ugu noqo tiradii hore"
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-                <span>Ka noqo (Undo)</span>
-              </button>
-            )}
-
-            {todayPages > 0 && (
-              <button
-                onClick={handleResetPages}
-                className="text-xs text-rose-300 hover:text-rose-100 flex items-center gap-1 transition px-2.5 py-1 rounded-xl bg-rose-500/15 border border-rose-500/30"
-                title="Tirtir dhammaan bogagga maanta oo ka dhig 0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Tirtir Bogagga (0)</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Live Today & Khatmah Counter Bar */}
-        <div className="p-3.5 rounded-2xl bg-[#061820] border border-teal-500/30 shadow-inner flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <BookMarked className="w-5 h-5 text-teal-400 shrink-0" />
-            <div className="flex items-center gap-3 flex-wrap">
-              <div>
-                <span className="text-[10px] text-amber-300/80 uppercase font-bold block">Khatmada Socota:</span>
-                <span className="text-xl sm:text-2xl font-black font-mono text-amber-300">
-                  {currentCyclePages} <span className="text-xs font-normal text-amber-400/60 font-sans">/ 604 bog</span>
-                </span>
-              </div>
-              <div className="h-7 w-px bg-white/10 hidden sm:block" />
-              <div>
-                <span className="text-[10px] text-teal-300/80 uppercase font-bold block">Maanta La Akhriyay:</span>
-                <span className="text-xl sm:text-2xl font-black font-mono text-cyan-300">
-                  {todayPages} <span className="text-xs font-normal text-slate-400 font-sans">bog</span>
-                </span>
+      {/* Unified Mobile App Quran Tracker Card (Today's Pages + Khatmah + Quick +/- Controls) */}
+      <div className="p-4 rounded-3xl bg-gradient-to-br from-[#0a232d] to-[#071921] border border-teal-500/30 shadow-xl space-y-3.5">
+        {/* Top 2x2 Compact Metrics */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Today's Pages Box */}
+          <div className="p-3 rounded-2xl bg-slate-950/60 border border-teal-500/25 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-300 block">
+                Bogagga Maanta
+              </span>
+              <div className="text-2xl font-black font-mono text-cyan-300 leading-tight mt-0.5">
+                {todayPages} <span className="text-xs font-normal text-slate-400">bog</span>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => handleSubtractPages(1)}
-              className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-black text-xs transition active:scale-95 flex items-center gap-1 cursor-pointer shadow"
-              title="Ka jar 1 bog Khatmada iyo Maanta"
-            >
-              <Minus className="w-3.5 h-3.5 stroke-[3]" />
-              <span>-1 Bog</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAddPages(1)}
-              className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/40 text-teal-200 font-black text-xs transition active:scale-95 flex items-center gap-1 cursor-pointer shadow"
-              title="Ku dar 1 bog Khatmada iyo Maanta"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span>+1 Bog</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Section 1: Quick Add Buttons */}
-        <div>
-          <div className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <Plus className="w-3.5 h-3.5" />
-              <span>Ku dar Bogag Maanta:</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-normal">Riix si aad toos ugu darto</span>
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[
-              { count: 1, label: '+1 Bog' },
-              { count: 2, label: '+2 Bog' },
-              { count: 5, label: '+5 Bog' },
-              { count: 9, label: '+9 Bog' },
-              { count: 10, label: '+10 Bog' },
-              { count: 20, label: '+20 Bog' },
-            ].map((item) => (
-              <button
-                key={item.count}
-                type="button"
-                onClick={() => handleAddPages(item.count)}
-                className="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-teal-500/15 to-emerald-500/15 hover:from-teal-500/30 hover:to-emerald-500/30 border border-teal-400/30 text-teal-200 font-black text-xs sm:text-sm transition flex items-center justify-center gap-1 shadow-sm active:scale-95 cursor-pointer"
-                title={`Ku dar +${item.count} bog`}
-              >
-                <Plus className="w-3.5 h-3.5 text-amber-300 stroke-[3]" />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Section 2: Quick Subtract/Delete Buttons (Laga tirtiri/jari karo) */}
-        <div>
-          <div className="text-[11px] font-bold text-rose-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <Minus className="w-3.5 h-3.5" />
-              <span>Ka jar / Tirtir Bogag Maanta (Haddii aad qaldantay):</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-normal">Riix si aad toos uga jarto</span>
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[
-              { count: 1, label: '-1 Bog' },
-              { count: 2, label: '-2 Bog' },
-              { count: 5, label: '-5 Bog' },
-              { count: 9, label: '-9 Bog' },
-              { count: 10, label: '-10 Bog' },
-              { count: 20, label: '-20 Bog' },
-            ].map((item) => (
-              <button
-                key={item.count}
-                type="button"
-                onClick={() => handleSubtractPages(item.count)}
-                className="py-2.5 px-3 rounded-2xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 hover:text-white font-black text-xs sm:text-sm transition flex items-center justify-center gap-1 shadow-sm active:scale-95 cursor-pointer"
-                title={`Ka jar -${item.count} bog tirada maanta`}
-              >
-                <Minus className="w-3.5 h-3.5 text-rose-400 stroke-[3]" />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Section 3: Custom Input Form (Add, Subtract, or Set Exact) */}
-        <div className="pt-2 border-t border-white/5 space-y-2">
-          <div className="text-[11px] text-slate-300 font-medium flex items-center justify-between">
-            <span>Geli tiro gaar ah si aad toos ugu darto ama uga jarto bogagga:</span>
-            <span className="text-[10px] text-amber-300/90 font-bold">
-              {customInput.trim() && parseInt(customInput.trim(), 10) > 0
-                ? `Tirada aad qortay: ${parseInt(customInput.trim(), 10)} bog`
-                : 'Tusaale: qor 9 kaddib taabo "- Ka jar"'}
-            </span>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="number"
-              min="1"
-              max="604"
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleCustomSubmit(e, 'subtract');
-                }
-              }}
-              placeholder="Qor tirada bogagga aad rabto (tusaale: 9)..."
-              className="flex-1 bg-slate-900/90 border border-teal-500/30 rounded-2xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-rose-400"
-            />
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={(e) => handleCustomSubmit(e, 'subtract')}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-600 hover:brightness-110 text-white font-black text-xs sm:text-sm transition active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 cursor-pointer"
-                title="Ka jar tiradan bogagga maanta"
+                onClick={() => handleSubtractPages(1)}
+                className="w-8 h-8 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-black text-base flex items-center justify-center active:scale-90 cursor-pointer"
+                title="Ka jar -1 bog"
               >
-                <Minus className="w-4 h-4 stroke-[3]" />
-                <span>
-                  {customInput.trim() && parseInt(customInput.trim(), 10) > 0
-                    ? `- ${parseInt(customInput.trim(), 10)} Ka jar`
-                    : '- Ka jar'}
-                </span>
+                -
               </button>
               <button
                 type="button"
-                onClick={(e) => handleCustomSubmit(e, 'add')}
-                className="flex-1 sm:flex-none px-4 py-2.5 rounded-2xl bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 font-black text-xs sm:text-sm hover:brightness-110 shadow-lg shadow-teal-500/20 transition active:scale-95 text-center flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Ku dar tiradan bogagga maanta"
+                onClick={() => handleAddPages(1)}
+                className="w-8 h-8 rounded-xl bg-teal-500/25 hover:bg-teal-500/40 border border-teal-400/40 text-teal-200 font-black text-base flex items-center justify-center active:scale-90 cursor-pointer"
+                title="Ku dar +1 bog"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>
-                  {customInput.trim() && parseInt(customInput.trim(), 10) > 0
-                    ? `+ ${parseInt(customInput.trim(), 10)} Ku dar`
-                    : '+ Ku dar'}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleCustomSubmit(e, 'set')}
-                className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm transition active:scale-95 cursor-pointer"
-                title="Toos u deji tiradan"
-              >
-                {customInput.trim() && parseInt(customInput.trim(), 10) > 0
-                  ? `Deji ${parseInt(customInput.trim(), 10)}`
-                  : 'Deji Toos'}
+                +
               </button>
             </div>
           </div>
+
+          {/* Khatmah Progress Box */}
+          <div className="p-3 rounded-2xl bg-slate-950/60 border border-amber-500/25 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
+                Khatmada
+              </span>
+              <div className="text-xl font-black font-mono text-amber-300 leading-tight mt-0.5">
+                {currentCyclePages}<span className="text-xs font-normal text-amber-400/60">/604</span>
+              </div>
+            </div>
+            <span className="text-xs font-black font-mono px-2 py-1 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              {cyclePercent}%
+            </span>
+          </div>
+        </div>
+
+        {/* Khatmah Progress Bar */}
+        <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-amber-400 via-emerald-400 to-teal-400 rounded-full transition-all duration-500"
+            style={{ width: `${cyclePercent}%` }}
+          />
+        </div>
+
+        {/* Fast Page Stepper Buttons (+1, +2, +4, +5, +10, +20) */}
+        <div className="grid grid-cols-6 gap-1.5">
+          {[1, 2, 4, 5, 10, 20].map((cnt) => (
+            <button
+              key={cnt}
+              type="button"
+              onClick={() => handleAddPages(cnt)}
+              className="py-2 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/30 text-teal-200 font-black text-xs transition active:scale-95 cursor-pointer"
+            >
+              +{cnt}
+            </button>
+          ))}
+        </div>
+
+        {/* Compact Custom Number Input Row */}
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            type="number"
+            min="1"
+            max="604"
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            placeholder="Tiro bogag (t.e. 9)..."
+            className="flex-1 min-w-0 bg-slate-950/80 border border-teal-500/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+          />
+          <button
+            type="button"
+            onClick={(e) => handleCustomSubmit(e, 'add')}
+            className="px-3 py-2 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 font-black text-xs transition active:scale-95 shrink-0 cursor-pointer"
+          >
+            + Ku dar
+          </button>
+          <button
+            type="button"
+            onClick={(e) => handleCustomSubmit(e, 'subtract')}
+            className="px-3 py-2 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 font-black text-xs transition active:scale-95 shrink-0 cursor-pointer"
+          >
+            - Ka jar
+          </button>
+          {todayPages > 0 && (
+            <button
+              type="button"
+              onClick={handleResetPages}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-white/10 transition active:scale-95 shrink-0 cursor-pointer"
+              title="Tirtir bogagga maanta (0)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* QURAN AUDIO & FULL READER HERO BANNER (CODADKA & AKHRISKA)    */}
+      {/* COMPACT MOBILE AUDIO & READER BAR                              */}
       {/* ============================================================== */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2a23] via-[#091f1a] to-[#04100c] border-2 border-emerald-500/40 p-5 sm:p-7 shadow-2xl">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          {/* Left Column: Title, Reciters badges, Description */}
-          <div className="space-y-3 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              <Headphones className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span>Cusub: Codadka & Akhriska Tooska ah (5 Shiikh oo Caan ah)</span>
+      <div className="p-4 rounded-3xl bg-gradient-to-br from-[#0c2a23] via-[#091f1a] to-[#04100c] border border-emerald-500/35 shadow-xl space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <Headphones className="w-5 h-5 text-emerald-300" />
             </div>
-
-            <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
-              Dhagayso Qur'aanka Kariimka adigoo Bogga Akhrinaya
-            </h2>
-
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Dhagayso suurad kasta oo aad doorato oo ay akhrinayaan <strong className="text-emerald-300">Mishary Al-Afasy, Cabdulbaasid, Al-Sudais, Al-Ghamdi, iyo Al-Minshawi</strong>. Aayadda hadda la akhrinayo ayaa kuu ifaysa (highlight), waxaadna shidi kartaa ama damin kartaa <strong className="text-teal-300">Macnaha Af-Soomaaliga</strong>.
-            </p>
-
-            {/* Reciters Avatars/Pills */}
-            <div className="flex items-center gap-2 flex-wrap pt-1 text-[11px] text-slate-300">
-              <span className="text-slate-400 font-semibold">Shiikhyada:</span>
-              <span className="px-2 py-0.5 rounded-lg bg-slate-900/80 border border-emerald-500/30 text-emerald-200">Mishary Al-Afasy</span>
-              <span className="px-2 py-0.5 rounded-lg bg-slate-900/80 border border-emerald-500/30 text-emerald-200">Cabdulbaasid</span>
-              <span className="px-2 py-0.5 rounded-lg bg-slate-900/80 border border-emerald-500/30 text-emerald-200">Al-Sudais</span>
-              <span className="px-2 py-0.5 rounded-lg bg-slate-900/80 border border-emerald-500/30 text-emerald-200">Al-Ghamdi</span>
-              <span className="px-2 py-0.5 rounded-lg bg-slate-900/80 border border-emerald-500/30 text-emerald-200">Al-Minshawi</span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-black text-white truncate">
+                Codadka &amp; Akhriska Qur&apos;aanka
+              </h2>
+              <p className="text-[11px] text-slate-400 truncate">
+                5 Shiikh (Al-Afasy, Cabdulbaasid, Al-Sudais...) + Tafsiir
+              </p>
             </div>
           </div>
 
-          {/* Right Column: Fast Launch Buttons */}
-          <div className="flex flex-col gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsOfflineModalOpen(true)}
+              className="px-3 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-200 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
+              title="Hal-Mar Suuradaha Offline ugu Diyaari Dhageysiga"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-300" />
+              <span className="hidden sm:inline">Offline Diyaari</span>
+              <span className="sm:hidden">Offline</span>
+            </button>
+
             <button
               type="button"
               onClick={() => handleOpenReader(1)}
-              className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-500/30 transition-transform active:scale-95"
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 active:scale-95 transition cursor-pointer"
             >
-              <Volume2 className="w-5 h-5 fill-current" />
-              <span>Fur Akhriska & Codadka (Suurad Kasta)</span>
+              <Volume2 className="w-4 h-4 fill-current" />
+              <span>Fur Akhriska</span>
             </button>
+          </div>
+        </div>
 
-            {/* Quick surah pills */}
-            <div className="flex items-center gap-1.5 flex-wrap justify-center lg:justify-start">
-              <span className="text-[11px] text-slate-400 mr-1">Toos u fur:</span>
-              <button
-                type="button"
-                onClick={() => handleOpenReader(1)}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition"
-              >
-                1. Al-Faatixa
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenReader(36)}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition"
-              >
-                36. Yaa-Siin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenReader(67)}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition"
-              >
-                67. Al-Mulk
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenReader(18)}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition"
-              >
-                18. Al-Kahf
-              </button>
-              <button
-                type="button"
-                onClick={() => handleOpenReader(112)}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition"
-              >
-                112. Al-Ikhlaas
-              </button>
+        {/* 1-Click Offline Caching Banner */}
+        <div className="p-3 rounded-2xl bg-gradient-to-r from-teal-950/80 via-emerald-950/70 to-slate-950 border border-teal-400/40 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-teal-400/20 border border-teal-400/35 flex items-center justify-center text-teal-300 shrink-0">
+              <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-black text-white block truncate">
+                Suuradaha Hal-Mar Offline ugu Diyaari Dhageysiga
+              </span>
+              <span className="text-[10px] text-teal-300/80 block truncate">
+                Kaydi Maalinlaha, Juz Camma ama 114-ka Suuro adigoon mid mid u gelin
+              </span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsOfflineModalOpen(true)}
+            className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-[11px] shadow-md hover:brightness-110 active:scale-95 transition shrink-0 cursor-pointer"
+          >
+            Hal-Mar Keydi ⚡
+          </button>
+        </div>
+
+        {/* Quick surah pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1">
+          <span className="text-[10px] font-bold text-slate-400 shrink-0">Toos u fur:</span>
+          {[
+            { num: 1, label: '1. Al-Faatixa' },
+            { num: 18, label: '18. Al-Kahf' },
+            { num: 36, label: '36. Yaa-Siin' },
+            { num: 67, label: '67. Al-Mulk' },
+            { num: 112, label: '112. Al-Ikhlaas' },
+          ].map((s) => (
+            <button
+              key={s.num}
+              type="button"
+              onClick={() => handleOpenReader(s.num)}
+              className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-emerald-950 border border-emerald-500/25 text-emerald-300 text-[11px] font-bold whitespace-nowrap transition shrink-0"
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* 114 SURAHS OF THE QUR'AN - COMPREHENSIVE TRACKER & SELECTOR   */}
+      {/* 114 SURAHS OF THE QUR'AN - COMPACT MOBILE TRACKER             */}
       {/* ============================================================== */}
-      <div className="p-4 sm:p-6 md:p-8 rounded-3xl bg-gradient-to-b from-[#0e212b] via-[#091a22] to-[#06141a] border border-teal-500/25 shadow-2xl space-y-6">
+      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-b from-[#0e212b] via-[#091a22] to-[#06141a] border border-teal-500/25 shadow-2xl space-y-4">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-teal-500/20 pb-5">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 font-bold text-xs">
-                114
-              </span>
-              <h3 className="text-lg sm:text-xl font-black text-white">
-                Dhammaan 114-ka Suuradood ee Qur'aanka Kariimka
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 font-bold text-xs">
+              114
+            </span>
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-white">
+                114-ka Suuradood ee Qur&apos;aanka
               </h3>
+              <p className="text-[11px] text-slate-400">
+                La akhriyay: <strong className="text-emerald-300">{allTimeSurahs.length}/114</strong> suuradood
+              </p>
             </div>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Suurad walba waxay leedahay tirada rasmiga ah ee bogagga ay tahay — waxaad ku dari
-              kartaa ama ka jari kartaa 1-Click!
-            </p>
           </div>
 
-          {/* Quick Actions & Status */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleSelectDailyRecommended}
-              className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300 text-xs font-bold transition flex items-center gap-1 active:scale-95"
-              title="Xulo Suuradaha Caanka ah (Kahf, Mulk, Yasin, Waaqicah, Ikhlaas, Falaq, Naas)"
-            >
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>Xulo Suuradaha Maalinlaha</span>
-            </button>
-
+          <div className="flex items-center gap-1.5">
             {todaySurahs.length > 0 && (
               <button
                 type="button"
                 onClick={handleResetSurahs}
-                className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/40 text-rose-200 text-xs font-bold transition flex items-center gap-1 active:scale-95 cursor-pointer shadow"
-                title="Tirtir dhammaan suuradaha qaldan ee maanta loo calaamadeeyay"
+                className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 border border-rose-400/30 text-rose-200 text-[11px] font-bold flex items-center gap-1 active:scale-95"
               >
-                <X className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Nadiifi Suuradaha ({todaySurahs.length})</span>
+                <X className="w-3 h-3" />
+                <span>Nadiifi ({todaySurahs.length})</span>
               </button>
-            )}
-
-            {/* Quick 1-Click Fix Buttons */}
-            <button
-              type="button"
-              onClick={handleResetAllToday}
-              className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 text-xs font-bold transition flex items-center gap-1 active:scale-95 cursor-pointer"
-              title="Eber maanta wax kasta oo qaldan (0 bog & 0 suuro)"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Nadiifi Maanta (Ebar 0)</span>
-            </button>
-
-            {onApplyUserQuranJourney && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSetOnly49To53}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 text-xs font-black transition flex items-center gap-1 active:scale-95 cursor-pointer"
-                  title="U deji maanta kaliya: 15 bog iyo suuradaha 49-53"
-                >
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>Deji Maanta: 15 Bog (49-53)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onApplyUserQuranJourney();
-                    setLastActionMessage('✓ Xogtaada waa la dejiyay: Maanta 15 bog (49-53) • Guud ahaan 66 suuradood (49-114)!');
-                    setTimeout(() => setLastActionMessage(null), 4000);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/25 via-teal-500/25 to-purple-500/25 hover:from-emerald-500/35 hover:to-purple-500/35 border border-emerald-400/40 text-emerald-200 text-xs font-black transition flex items-center gap-1 active:scale-95 cursor-pointer shadow"
-                  title="Diiwaangeli: Maanta 15 bog & 49-53 • Guud ahaan 66 suuradood (49-114)"
-                >
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>Qorshahaaga: Maanta 15 bog (49-53) • Guud ahaan 66 (49-114)</span>
-                </button>
-              </>
             )}
 
             {/* View Mode Toggle: Grid or List */}
@@ -1108,9 +686,9 @@ export const QuranView: React.FC<QuranViewProps> = ({
                     ? 'bg-teal-500/30 text-teal-200'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Muuqaalka Kaararka (Grid)"
+                title="Grid"
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
@@ -1119,24 +697,24 @@ export const QuranView: React.FC<QuranViewProps> = ({
                     ? 'bg-teal-500/30 text-teal-200'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Muuqaalka Liiska (List)"
+                title="List"
               >
-                <List className="w-4 h-4" />
+                <List className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
         {/* Search & Category Filter Pills */}
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           <div className="relative">
             <Search className="w-4 h-4 text-teal-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Baadh lambarka suuradda (1-114), magaca Soomaaliga (Baqarah), micnaha, ama Carabiga..."
-              className="w-full bg-slate-900/90 border border-teal-500/30 rounded-2xl pl-10 pr-10 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+              placeholder="Raadi suuradda (1-114) ama magaceeda..."
+              className="w-full bg-slate-900/90 border border-teal-500/30 rounded-2xl pl-9 pr-9 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-400"
             />
             {searchQuery && (
               <button
@@ -1149,173 +727,68 @@ export const QuranView: React.FC<QuranViewProps> = ({
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 text-xs">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5 text-[11px]">
             <button
               onClick={() => setSelectedFilter('all')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition ${
                 selectedFilter === 'all'
-                  ? 'bg-teal-400 text-slate-950 shadow-md shadow-teal-400/20'
-                  : 'bg-slate-900/80 border border-teal-500/25 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-teal-400 text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 border border-teal-500/20 text-slate-300'
               }`}
             >
               Dhammaan (114)
             </button>
             <button
-              onClick={() => setSelectedFilter('allTime')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 ${
-                selectedFilter === 'allTime'
-                  ? 'bg-gradient-to-r from-emerald-400 to-purple-400 text-slate-950 shadow-md font-black'
-                  : 'bg-slate-900/80 border border-purple-500/40 text-purple-300 hover:bg-slate-800'
-              }`}
-            >
-              <span>⭐ Wadarta Guud ee La Akhriyay</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-purple-950 text-purple-200 text-[10px] font-black">
-                {allTimeSurahs.length}
-              </span>
-            </button>
-            <button
               onClick={() => setSelectedFilter('today')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition flex items-center gap-1 ${
                 selectedFilter === 'today'
-                  ? 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-400/20'
-                  : 'bg-slate-900/80 border border-emerald-500/35 text-emerald-300 hover:bg-slate-800'
+                  ? 'bg-emerald-400 text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 border border-emerald-500/30 text-emerald-300'
               }`}
             >
-              <span>🟢 Maanta La Akhriyay</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-200 text-[10px] font-black">
-                {todaySurahs.length}
-              </span>
+              <span>🟢 Maanta ({todaySurahs.length})</span>
             </button>
             <button
-              onClick={() => setSelectedFilter('previously')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 ${
-                selectedFilter === 'previously'
-                  ? 'bg-purple-400 text-slate-950 shadow-md shadow-purple-400/20'
-                  : 'bg-slate-900/80 border border-purple-500/35 text-purple-300 hover:bg-slate-800'
+              onClick={() => setSelectedFilter('allTime')}
+              className={`px-2.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition flex items-center gap-1 ${
+                selectedFilter === 'allTime'
+                  ? 'bg-purple-400 text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 border border-purple-500/30 text-purple-300'
               }`}
             >
-              <span>🟣 Horay Loo Akhriyay</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-purple-950 text-purple-200 text-[10px] font-black">
-                {previouslyReadSurahs.length}
-              </span>
+              <span>⭐ La Akhriyay ({allTimeSurahs.length})</span>
             </button>
             <button
               onClick={() => setSelectedFilter('remaining')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition ${
                 selectedFilter === 'remaining'
-                  ? 'bg-slate-200 text-slate-950 shadow-md'
-                  : 'bg-slate-900/80 border border-slate-700 text-slate-400 hover:bg-slate-800'
+                  ? 'bg-slate-200 text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 border border-slate-700 text-slate-400'
               }`}
             >
-              <span>⚪ Aan Weli La Akhrin</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 text-[10px] font-black">
-                {remainingSurahs.length}
-              </span>
+              Dhiman ({remainingSurahs.length})
             </button>
             <button
               onClick={() => setSelectedFilter('recommended')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition ${
                 selectedFilter === 'recommended'
-                  ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20'
-                  : 'bg-slate-900/80 border border-teal-500/25 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-amber-400 text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 border border-teal-500/20 text-slate-300'
               }`}
             >
-              ⭐ Maalinle Caanka ah (8)
-            </button>
-            <button
-              onClick={() => setSelectedFilter('makki')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 ${
-                selectedFilter === 'makki'
-                  ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/20'
-                  : 'bg-slate-900/80 border border-teal-500/25 text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              🕋 Makki (86)
-            </button>
-            <button
-              onClick={() => setSelectedFilter('madani')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 ${
-                selectedFilter === 'madani'
-                  ? 'bg-teal-400 text-slate-950 shadow-md shadow-teal-400/20'
-                  : 'bg-slate-900/80 border border-teal-500/25 text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              🕌 Madani (28)
+              ⭐ Maalinle (8)
             </button>
             <button
               onClick={() => setSelectedFilter('juz30')}
-              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition ${
                 selectedFilter === 'juz30'
-                  ? 'bg-purple-400 text-slate-950 shadow-md shadow-purple-400/20'
-                  : 'bg-slate-900/80 border border-teal-500/25 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 border border-teal-500/20 text-slate-300'
               }`}
             >
-              Juz Camma (Juz 30)
+              Juz Camma
             </button>
           </div>
-        </div>
-
-        {/* User's Quran Journey Summary Banner */}
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-emerald-950/40 border border-purple-500/35 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 font-bold shrink-0">
-              <BookOpen className="w-5 h-5 text-purple-300" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-xs sm:text-sm font-black text-white">
-                  Diiwaankaaga: {allTimeSurahs.length} Suuradood ayaa ku qoran
-                </h4>
-                <span className="px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-200 text-[10px] font-black border border-purple-400/30">
-                  {allTimeSurahs.length} / 114 Suuradood
-                </span>
-              </div>
-              <p className="text-[11px] sm:text-xs text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap">
-                <span className="text-emerald-300 font-black">
-                  🟢 Maanta: {todaySurahs.length} Suuradood &amp; {todayPages} bog
-                </span>
-                <span className="text-slate-500">•</span>
-                <span className="text-purple-300 font-black">
-                  🟣 Horay Loo Akhriyay: {previouslyReadSurahs.length} Suuradood
-                </span>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setSelectedFilter('previously')}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition active:scale-95 flex items-center gap-1 cursor-pointer ${
-                selectedFilter === 'previously'
-                  ? 'bg-purple-500 text-white border-purple-400 shadow'
-                  : 'bg-purple-500/20 hover:bg-purple-500/30 border-purple-400/30 text-purple-200'
-              }`}
-            >
-              <span>🟣 Arag Kuwii Hore ({previouslyReadSurahs.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedFilter('today')}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition active:scale-95 flex items-center gap-1 cursor-pointer ${
-                selectedFilter === 'today'
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow'
-                  : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/30 text-emerald-200'
-              }`}
-            >
-              <span>🟢 Arag Maanta ({todaySurahs.length})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Results Counter & Fast Stats */}
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span>
-            Waxaa la helay <strong className="text-teal-300">{filteredSurahs.length}</strong>{' '}
-            suuradood
-          </span>
-          <span className="text-[11px] text-teal-400/90 hidden sm:inline">
-            Tirada bogagga ee suurad walba si toos ah ayaad ugu dari kartaa ama uga jari kartaa maanta
-          </span>
         </div>
 
         {/* ================= SURAHS LIST / GRID VIEW ================= */}
@@ -1773,6 +1246,16 @@ export const QuranView: React.FC<QuranViewProps> = ({
         onClose={() => setIsReaderOpen(false)}
         onAddPagesRead={(pages) => {
           handleAddPages(pages, "Akhriska Qur'aanka");
+        }}
+      />
+
+      {/* 1-Click Quran Offline Audio & Surah Downloader Modal */}
+      <QuranOfflineModal
+        isOpen={isOfflineModalOpen}
+        onClose={() => setIsOfflineModalOpen(false)}
+        onOpenReader={(surahNum) => {
+          setIsOfflineModalOpen(false);
+          handleOpenReader(surahNum);
         }}
       />
     </div>

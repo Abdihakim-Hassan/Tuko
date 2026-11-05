@@ -15,36 +15,33 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-// Clean up any old caches or stuck service workers in idle time so page reloads are always instant
-if (typeof window !== 'undefined') {
-  const cleanupStaleWorkersAndCaches = () => {
+// Register PWA Service Worker for Android/iOS/Desktop installability and clean up stale caches
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  const registerPwaServiceWorker = () => {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        reg.update().catch(() => {});
+      })
+      .catch(() => {});
+
     if ('caches' in window) {
       caches
         .keys()
         .then((keys) => {
           keys.forEach((key) => {
-            caches.delete(key).catch(() => {});
+            if (key !== 'tuko-pwa-v62') {
+              caches.delete(key).catch(() => {});
+            }
           });
-        })
-        .catch(() => {});
-    }
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .getRegistrations()
-        .then((registrations) => {
-          for (const reg of registrations) {
-            // Update or unregister any old intercepting service worker
-            reg.update().catch(() => {});
-          }
         })
         .catch(() => {});
     }
   };
 
   if (document.readyState === 'complete') {
-    setTimeout(cleanupStaleWorkersAndCaches, 2000);
+    registerPwaServiceWorker();
   } else {
-    window.addEventListener('load', () => setTimeout(cleanupStaleWorkersAndCaches, 2000), { once: true });
+    window.addEventListener('load', registerPwaServiceWorker, { once: true });
   }
 }

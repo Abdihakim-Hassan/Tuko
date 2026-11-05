@@ -71,71 +71,68 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const selectedDayData = allDays[selectedCellKey];
 
   return (
-    <div className="space-y-6">
-      {/* Calendar Header Card */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0c242e] via-[#092e38] to-[#061d24] border border-teal-500/25 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
+    <div className="space-y-4">
+      {/* Compact Calendar Header & Month Totals */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#0c242e] via-[#092e38] to-[#061d24] border border-teal-500/25 shadow-xl space-y-3.5">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-5 h-5 text-cyan-300" />
-            <h2 className="text-xl sm:text-2xl font-black text-white">
-              Kalandarka Salaadaha
+            <h2 className="text-base sm:text-lg font-black text-white">
+              Kalandarka
             </h2>
           </div>
-          <p className="text-xs text-slate-300 mt-1">
-            Eeg rikoodhka salaadaha bishaan iyo maalin kasta xaaladdeeda
-          </p>
-        </div>
 
-        {/* Month Navigation */}
-        <div className="flex items-center gap-3 bg-slate-900/80 px-4 py-2 rounded-2xl border border-teal-500/30">
-          <button
-            onClick={handlePrevMonth}
-            className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
-            title="Bishii hore"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="font-extrabold text-sm sm:text-base text-teal-200 min-w-[130px] text-center">
-            {somaliMonths[month]} {year}
-          </span>
-          <button
-            onClick={handleNextMonth}
-            className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition"
-            title="Bisha dambe"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Month Totals Summary */}
-      <div className={`grid ${isSisterMode ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} gap-3`}>
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-950/50 to-teal-950/50 border border-emerald-500/25 text-center">
-          <span className="text-xs font-bold text-emerald-400">
-            {isSisterMode ? '🌟 Waqtiga Hore' : '🕌 Masaajid'}
-          </span>
-          <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
-            {monthMosque}
+          {/* Month Navigation */}
+          <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-teal-500/30">
+            <button
+              onClick={handlePrevMonth}
+              className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition"
+              title="Bishii hore"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="font-extrabold text-xs sm:text-sm text-teal-200 min-w-[110px] text-center">
+              {somaliMonths[month]} {year}
+            </span>
+            <button
+              onClick={handleNextMonth}
+              className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition"
+              title="Bisha dambe"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/50 to-orange-950/50 border border-amber-500/25 text-center">
-          <span className="text-xs font-bold text-amber-400">🏠 Guriga</span>
-          <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
-            {monthHome}
-          </div>
-        </div>
-        {isSisterMode && (
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-pink-950/50 to-rose-950/50 border border-pink-500/25 text-center">
-            <span className="text-xs font-bold text-pink-300">🌸 Fasax (Udhur)</span>
-            <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
-              {monthExcused}
+
+        {/* Month Totals Summary */}
+        <div className={`grid ${isSisterMode ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
+          <div className="p-2.5 rounded-2xl bg-emerald-950/50 border border-emerald-500/25 text-center">
+            <span className="text-[10px] font-bold text-emerald-400 block truncate">
+              {isSisterMode ? '🌟 Waqtiga' : '🕌 Masaajid'}
+            </span>
+            <div className="text-lg font-black text-white font-mono">
+              {monthMosque}
             </div>
           </div>
-        )}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/50 to-red-950/50 border border-rose-500/25 text-center">
-          <span className="text-xs font-bold text-rose-400">❌ Lama tukan</span>
-          <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
-            {monthMissed}
+          <div className="p-2.5 rounded-2xl bg-amber-950/50 border border-amber-500/25 text-center">
+            <span className="text-[10px] font-bold text-amber-400 block truncate">🏠 Guriga</span>
+            <div className="text-lg font-black text-white font-mono">
+              {monthHome}
+            </div>
+          </div>
+          {isSisterMode && (
+            <div className="p-2.5 rounded-2xl bg-pink-950/50 border border-pink-500/25 text-center">
+              <span className="text-[10px] font-bold text-pink-300 block truncate">🌸 Fasax</span>
+              <div className="text-lg font-black text-white font-mono">
+                {monthExcused}
+              </div>
+            </div>
+          )}
+          <div className="p-2.5 rounded-2xl bg-rose-950/50 border border-rose-500/25 text-center">
+            <span className="text-[10px] font-bold text-rose-400 block truncate">❌ Dhaafay</span>
+            <div className="text-lg font-black text-white font-mono">
+              {monthMissed}
+            </div>
           </div>
         </div>
       </div>

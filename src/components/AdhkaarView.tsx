@@ -170,35 +170,64 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
     return 'none';
   };
 
-  // Calculate stats for each prayer tab individually
+  // Calculate stats for each prayer tab individually (including read & not_read status)
   const prayerStats = useMemo(() => {
-    const stats: Record<PrayerName, { completed: number; total: number; isDone: boolean }> = {
-      Fajr: { completed: 0, total: 0, isDone: false },
-      Sunrise: { completed: 0, total: 0, isDone: false },
-      Duhur: { completed: 0, total: 0, isDone: false },
-      Casar: { completed: 0, total: 0, isDone: false },
-      Maqrib: { completed: 0, total: 0, isDone: false },
-      Cishe: { completed: 0, total: 0, isDone: false },
+    const stats: Record<
+      PrayerName,
+      { completed: number; notRead: number; total: number; isDone: boolean; isNotRead: boolean }
+    > = {
+      Fajr: { completed: 0, notRead: 0, total: 0, isDone: false, isNotRead: false },
+      Sunrise: { completed: 0, notRead: 0, total: 0, isDone: false, isNotRead: false },
+      Duhur: { completed: 0, notRead: 0, total: 0, isDone: false, isNotRead: false },
+      Casar: { completed: 0, notRead: 0, total: 0, isDone: false, isNotRead: false },
+      Maqrib: { completed: 0, notRead: 0, total: 0, isDone: false, isNotRead: false },
+      Cishe: { completed: 0, notRead: 0, total: 0, isDone: false, isNotRead: false },
     };
 
     PRAYER_LIST.forEach((p) => {
       const pItems = resolvedBaseAdhkar.filter((item) => item.prayer === 'all' || item.prayer === p);
       const done = pItems.filter((item) => getAdhkarStatus(item, p) === 'read').length;
+      const notRead = pItems.filter((item) => getAdhkarStatus(item, p) === 'not_read').length;
+      const isDone = done === pItems.length && pItems.length > 0;
+      const isNotRead = !isDone && notRead > 0 && done === 0;
       stats[p] = {
         completed: done,
+        notRead,
         total: pItems.length,
-        isDone: done === pItems.length && pItems.length > 0,
+        isDone,
+        isNotRead,
       };
     });
 
     return stats;
   }, [dayData.adhkar, resolvedBaseAdhkar]);
 
+  // Calculate status for Custom Duas tab & All tab
+  const customTabStats = useMemo(() => {
+    const total = customDuas.length;
+    const done = customDuas.filter((c) => getCustomDuaStatus(c.id, currentPrayer) === 'read').length;
+    const notRead = customDuas.filter((c) => getCustomDuaStatus(c.id, currentPrayer) === 'not_read').length;
+    const isDone = total > 0 && done === total;
+    const isNotRead = !isDone && total > 0 && notRead > 0 && done === 0;
+    return { completed: done, notRead, total, isDone, isNotRead };
+  }, [customDuas, dayData.customDuasCompleted, currentPrayer]);
+
+  const allTabStats = useMemo(() => {
+    const allDone = PRAYER_LIST.every((p) => prayerStats[p].isDone);
+    const allNotRead = PRAYER_LIST.every((p) => prayerStats[p].isNotRead);
+    return { isDone: allDone, isNotRead: allNotRead };
+  }, [prayerStats]);
+
   // Current view completed and total counts
   const currentViewStats = useMemo(() => {
     if (activeFilter === 'custom') {
       const completed = filteredCustom.filter((c) => getCustomDuaStatus(c.id, currentPrayer) === 'read').length;
-      return { completed, total: filteredCustom.length };
+      return {
+        completed,
+        total: filteredCustom.length,
+        isDone: customTabStats.isDone,
+        isNotRead: customTabStats.isNotRead,
+      };
     }
     if (activeFilter === 'all') {
       const baseDone = filteredBase.filter((b) => {
@@ -209,6 +238,8 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
       return {
         completed: baseDone + customDone,
         total: filteredBase.length + filteredCustom.length,
+        isDone: allTabStats.isDone,
+        isNotRead: allTabStats.isNotRead,
       };
     }
     // Specific prayer tab
@@ -217,8 +248,10 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
     return {
       completed: pStat.completed + customDone,
       total: pStat.total + filteredCustom.length,
+      isDone: pStat.isDone,
+      isNotRead: pStat.isNotRead,
     };
-  }, [activeFilter, filteredBase, filteredCustom, prayerStats, currentPrayer, dayData]);
+  }, [activeFilter, filteredBase, filteredCustom, prayerStats, customTabStats, allTabStats, currentPrayer, dayData]);
 
   // Toggle single adhkar item for the selected prayer (Sax ✓ = true, Qalad ✕ = false)
   const handleToggleItem = (item: AdhkarDefinition, value: boolean) => {
@@ -245,14 +278,22 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
         ? 'Dhammaan Adhkaarta & Ducooyinka'
         : `Salaadda ${PRAYER_SOMALI_LABELS[prayerToMark]}`;
 
-    const baseKeysToMark =
-      activeFilter === 'custom'
-        ? []
-        : filteredBase.map((item) => {
-            const p =
-              activeFilter === 'all' ? (item.prayer !== 'all' ? item.prayer : currentPrayer) : prayerToMark;
-            return `${p}:${item.id}`;
-          });
+    const baseKeysToMark: string[] = [];
+    if (activeFilter !== 'custom') {
+      if (activeFilter === 'all') {
+        PRAYER_LIST.forEach((p) => {
+          resolvedBaseAdhkar
+            .filter((item) => item.prayer === 'all' || item.prayer === p)
+            .forEach((item) => {
+              baseKeysToMark.push(`${p}:${item.id}`);
+            });
+        });
+      } else {
+        filteredBase.forEach((item) => {
+          baseKeysToMark.push(`${prayerToMark}:${item.id}`);
+        });
+      }
+    }
 
     const customKeysToMark: string[] = [];
     filteredCustom.forEach((dua) => {
@@ -279,14 +320,22 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
         ? 'Dhammaan Adhkaarta & Ducooyinka'
         : `Salaadda ${PRAYER_SOMALI_LABELS[prayerToClear]}`;
 
-    const baseKeysToClear =
-      activeFilter === 'custom'
-        ? []
-        : filteredBase.map((item) => {
-            const p =
-              activeFilter === 'all' ? (item.prayer !== 'all' ? item.prayer : currentPrayer) : prayerToClear;
-            return `${p}:${item.id}`;
-          });
+    const baseKeysToClear: string[] = [];
+    if (activeFilter !== 'custom') {
+      if (activeFilter === 'all') {
+        PRAYER_LIST.forEach((p) => {
+          resolvedBaseAdhkar
+            .filter((item) => item.prayer === 'all' || item.prayer === p)
+            .forEach((item) => {
+              baseKeysToClear.push(`${p}:${item.id}`);
+            });
+        });
+      } else {
+        filteredBase.forEach((item) => {
+          baseKeysToClear.push(`${prayerToClear}:${item.id}`);
+        });
+      }
+    }
 
     const customKeysToClear: string[] = [];
     filteredCustom.forEach((dua) => {
@@ -393,54 +442,30 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0c242e] via-[#0b2b36] to-[#071f26] border border-teal-500/25 shadow-xl">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl sm:text-3xl">📿</span>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Adhkaar &amp; Ducooyin
-              </h2>
-              <div className="flex items-center gap-2 mt-0.5 text-xs text-teal-300 font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>
-                  Salaadda Hadda: <strong>{PRAYER_SOMALI_LABELS[currentPrayer]}</strong>
-                </span>
-              </div>
+      {/* Compact Mobile App Header Banner */}
+      <div className="flex items-center justify-between gap-3 p-4 rounded-3xl bg-gradient-to-br from-[#0c242e] via-[#0b2b36] to-[#071f26] border border-teal-500/25 shadow-xl">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-2xl shrink-0">📿</span>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-black text-white truncate">
+              Adhkaar &amp; Ducooyin
+            </h2>
+            <div className="flex items-center gap-1.5 text-[11px] text-teal-300 font-semibold truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span>
+                {PRAYER_SOMALI_LABELS[currentPrayer]} • {currentViewStats.completed}/{currentViewStats.total} la akhriyay
+              </span>
             </div>
           </div>
-          <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-xl leading-relaxed">
-            Daba-gal adhkaarta iyo ducooyinkaaga. Mid kasta waxaad saari kartaa{' '}
-            <strong className="text-emerald-300">Sax (✓ Waan Akhriyay)</strong> ama{' '}
-            <strong className="text-rose-300">Qalad (✕ Ma Akhrinin)</strong>, sidoo kalena duco kasta waxaad ka beddeli kartaa{' '}
-            <strong className="text-amber-300">Qoraalka iyo Tirada (Edit ✏️)</strong>.
-          </p>
         </div>
 
-        {/* Progress & Add Custom Dua Button */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="px-4 py-2 rounded-2xl bg-gradient-to-r from-teal-500/20 to-emerald-500/20 border border-teal-400/30 text-teal-200">
-            <span className="text-[11px] font-bold uppercase tracking-wider opacity-80 block">
-              {activeFilter === 'all'
-                ? 'Salaadda Hadda'
-                : activeFilter === 'custom'
-                ? 'Ducooyinka'
-                : PRAYER_SOMALI_LABELS[activeFilter]}
-            </span>
-            <span className="text-xl font-black font-mono tabular-nums">
-              {currentViewStats.completed} / {currentViewStats.total}
-            </span>
-          </div>
-
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-4 py-3 rounded-2xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-teal-500/25 transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Ku dar Duco</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:brightness-110 text-slate-950 font-black text-xs shadow-md transition flex items-center gap-1.5 active:scale-95 shrink-0 cursor-pointer"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+          <span>Ku dar Duco</span>
+        </button>
       </div>
 
       {/* Action Notification Toast */}
@@ -465,47 +490,83 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
 
       {/* Prayer-by-Prayer Selector Tabs */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
           <span className="font-bold uppercase tracking-wider text-teal-300/90 text-[11px]">
             Dooro Salaadda ama Ducooyinka aad rabto:
           </span>
-          <span className="text-[11px] text-slate-400 hidden sm:inline">
-            Salaad kasta waxay leedahay diiwaan u gaar ah
-          </span>
+          <div className="flex items-center gap-3 text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-1 text-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Waa la akhriyay
+            </span>
+            <span className="inline-flex items-center gap-1 text-rose-300">
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Lama akhrin
+            </span>
+            <span className="inline-flex items-center gap-1 text-sky-300">
+              <span className="w-2 h-2 rounded-full bg-sky-500" />
+              Wali lama akhrin (La doortay)
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1.5 px-0.5">
           {PRAYER_LIST.map((p) => {
             const pStat = prayerStats[p];
             const isCurrent = p === currentPrayer;
             const isSelected = activeFilter === p;
 
+            // 3 distinct color states:
+            // 1. All Read (isDone) -> GREEN (Cagaar)
+            // 2. Marked Not Read (isNotRead) -> RED (Gaduud)
+            // 3. Not Read Yet / Pending -> SKY-BLUE/INDIGO when selected ("color uyeel oo cal nuuc ah"), dark slate when unselected
+            const tabClass = pStat.isDone
+              ? isSelected
+                ? 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 text-slate-950 border-emerald-200 shadow-lg shadow-emerald-500/35 ring-2 ring-emerald-300/80 font-black'
+                : 'bg-gradient-to-r from-emerald-600/85 to-green-700/85 hover:from-emerald-500 hover:to-green-600 text-white border-emerald-400/60 shadow-md shadow-emerald-600/20 font-bold'
+              : pStat.isNotRead
+              ? isSelected
+                ? 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white border-rose-200 shadow-lg shadow-rose-600/40 ring-2 ring-rose-300/80 font-black'
+                : 'bg-gradient-to-r from-rose-900/90 to-red-900/90 hover:from-rose-800 hover:to-red-800 text-rose-100 border-rose-500/60 shadow-md shadow-rose-600/20 font-bold'
+              : isSelected
+              ? 'bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 text-white border-sky-200 shadow-lg shadow-sky-500/35 ring-2 ring-sky-300/80 font-black'
+              : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700/70';
+
+            const badgeClass = pStat.isDone
+              ? isSelected
+                ? 'bg-slate-950/85 text-emerald-300 border border-emerald-400/50'
+                : 'bg-emerald-950/90 text-emerald-200 border border-emerald-400/50'
+              : pStat.isNotRead
+              ? isSelected
+                ? 'bg-rose-950/90 text-rose-200 border border-rose-300/60'
+                : 'bg-rose-950/90 text-rose-300 border border-rose-500/40'
+              : isSelected
+              ? 'bg-slate-950/80 text-sky-200 border border-sky-300/50'
+              : 'bg-slate-800 text-slate-400';
+
             return (
               <button
                 key={p}
                 onClick={() => setActiveFilter(p)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-bold transition whitespace-nowrap active:scale-95 border cursor-pointer ${
-                  isSelected
-                    ? 'bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-500 text-slate-950 border-teal-400 shadow-md shadow-teal-500/20 font-black'
-                    : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-teal-500/20'
-                }`}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs transition whitespace-nowrap active:scale-95 border cursor-pointer ${tabClass}`}
               >
                 <span>{PRAYER_SOMALI_LABELS[p]}</span>
 
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                    isSelected
-                      ? 'bg-slate-950 text-teal-300'
-                      : pStat.isDone
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {pStat.isDone ? '✓ Dhan' : `${pStat.completed}/${pStat.total}`}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${badgeClass}`}>
+                  {pStat.isDone
+                    ? '✓ Dhan'
+                    : pStat.isNotRead
+                    ? '✕ Lama akhrin'
+                    : `${pStat.completed}/${pStat.total}`}
                 </span>
 
-                {isCurrent && !isSelected && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Waqtiga Hadda" />
+                {isCurrent && (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                      isSelected ? 'bg-white' : 'bg-emerald-400'
+                    }`}
+                    title="Waqtiga Hadda"
+                  />
                 )}
               </button>
             );
@@ -514,42 +575,117 @@ export const AdhkaarView: React.FC<AdhkaarViewProps> = ({
           {/* Custom Duas Tab */}
           <button
             onClick={() => setActiveFilter('custom')}
-            className={`px-3 py-2 rounded-2xl text-xs font-bold transition whitespace-nowrap active:scale-95 border cursor-pointer ${
-              activeFilter === 'custom'
-                ? 'bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 border-amber-300 shadow-md font-black'
-                : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-teal-500/20'
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs transition whitespace-nowrap active:scale-95 border cursor-pointer ${
+              customTabStats.isDone
+                ? activeFilter === 'custom'
+                  ? 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 text-slate-950 border-emerald-200 shadow-lg shadow-emerald-500/35 ring-2 ring-emerald-300/80 font-black'
+                  : 'bg-gradient-to-r from-emerald-600/85 to-green-700/85 text-white border-emerald-400/60 font-bold'
+                : customTabStats.isNotRead
+                ? activeFilter === 'custom'
+                  ? 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white border-rose-200 shadow-lg shadow-rose-600/40 ring-2 ring-rose-300/80 font-black'
+                  : 'bg-gradient-to-r from-rose-900/90 to-red-900/90 text-rose-100 border-rose-500/60 font-bold'
+                : activeFilter === 'custom'
+                ? 'bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 border-amber-200 shadow-lg shadow-amber-500/30 ring-2 ring-amber-300/80 font-black'
+                : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700/70 font-bold'
             }`}
           >
-            ⭐ Ducooyinkayga ({customDuas.length})
+            <span>⭐ Ducooyinkayga ({customDuas.length})</span>
+            {customTabStats.isDone && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-950/85 text-emerald-300 font-mono font-bold">
+                ✓ Dhan
+              </span>
+            )}
+            {customTabStats.isNotRead && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-950/90 text-rose-200 font-mono font-bold">
+                ✕ Lama akhrin
+              </span>
+            )}
           </button>
 
           {/* All Prayers Tab */}
           <button
             onClick={() => setActiveFilter('all')}
-            className={`px-3 py-2 rounded-2xl text-xs font-bold transition whitespace-nowrap active:scale-95 border cursor-pointer ${
-              activeFilter === 'all'
-                ? 'bg-teal-500 text-slate-950 border-teal-400 font-black'
-                : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-teal-500/20'
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs transition whitespace-nowrap active:scale-95 border cursor-pointer ${
+              allTabStats.isDone
+                ? activeFilter === 'all'
+                  ? 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 text-slate-950 border-emerald-200 shadow-lg shadow-emerald-500/35 ring-2 ring-emerald-300/80 font-black'
+                  : 'bg-gradient-to-r from-emerald-600/85 to-green-700/85 text-white border-emerald-400/60 font-bold'
+                : allTabStats.isNotRead
+                ? activeFilter === 'all'
+                  ? 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white border-rose-200 shadow-lg shadow-rose-600/40 ring-2 ring-rose-300/80 font-black'
+                  : 'bg-gradient-to-r from-rose-900/90 to-red-900/90 text-rose-100 border-rose-500/60 font-bold'
+                : activeFilter === 'all'
+                ? 'bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 text-white border-sky-200 shadow-lg shadow-sky-500/35 ring-2 ring-sky-300/80 font-black'
+                : 'bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700/70 font-bold'
             }`}
           >
-            Dhammaan
+            <span>Dhammaan</span>
+            {allTabStats.isDone && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-950/85 text-emerald-300 font-mono font-bold">
+                ✓ Dhan
+              </span>
+            )}
+            {allTabStats.isNotRead && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-950/90 text-rose-200 font-mono font-bold">
+                ✕ Lama akhrin
+              </span>
+            )}
           </button>
         </div>
       </div>
 
       {/* Bulk Action Bar: "Waan Akhriyay Dhammaan" & "Ma Akhrinin Dhammaan" */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900/80 border border-teal-500/30 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <Compass className="w-4 h-4 text-cyan-400 shrink-0" />
+      <div
+        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border backdrop-blur-md transition ${
+          currentViewStats.isDone
+            ? 'bg-emerald-950/40 border-emerald-500/40'
+            : currentViewStats.isNotRead
+            ? 'bg-rose-950/40 border-rose-500/40'
+            : 'bg-slate-900/80 border-sky-500/35'
+        }`}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <Compass
+            className={`w-4 h-4 shrink-0 ${
+              currentViewStats.isDone
+                ? 'text-emerald-400'
+                : currentViewStats.isNotRead
+                ? 'text-rose-400'
+                : 'text-sky-400'
+            }`}
+          />
           <span className="text-xs text-slate-200">
             Qeybta Hadda:{' '}
-            <strong className="text-teal-300 font-black">
+            <strong
+              className={`font-black ${
+                currentViewStats.isDone
+                  ? 'text-emerald-300'
+                  : currentViewStats.isNotRead
+                  ? 'text-rose-300'
+                  : 'text-sky-300'
+              }`}
+            >
               {activeFilter === 'all'
                 ? `Dhammaan (${PRAYER_SOMALI_LABELS[currentPrayer]})`
                 : activeFilter === 'custom'
                 ? 'Ducooyinkaaga Gaarka ah'
                 : `Salaadda ${PRAYER_SOMALI_LABELS[activeFilter]}`}
             </strong>
+          </span>
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+              currentViewStats.isDone
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                : currentViewStats.isNotRead
+                ? 'bg-rose-500/20 text-rose-300 border-rose-400/40'
+                : 'bg-sky-500/20 text-sky-300 border-sky-400/40'
+            }`}
+          >
+            {currentViewStats.isDone
+              ? '🟢 Dhammaan waa la akhriyay'
+              : currentViewStats.isNotRead
+              ? '🔴 Dhammaan lama akhrin'
+              : '🔵 Wali lama akhrin'}
           </span>
         </div>
 

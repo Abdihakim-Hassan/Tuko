@@ -498,80 +498,45 @@ export const ToDoView: React.FC<ToDoViewProps> = ({
         onChange={handleAttachPhotoToExistingTask}
       />
 
-      {/* 1. Header Banner & Stats */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0c2630] via-[#09303d] to-[#062029] border border-teal-500/30 p-4 sm:p-6 shadow-2xl">
-        <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="p-2 rounded-xl bg-teal-500/20 text-teal-300">
-                <CheckSquare className="w-5 h-5 text-teal-400" />
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-teal-300">
-                Liiska Hawlaha &amp; Qorshaha (To-Do)
-              </span>
+      {/* 1. Compact Mobile App Header & Progress Summary */}
+      <div className="p-4 rounded-3xl bg-gradient-to-br from-[#0c2630] via-[#09303d] to-[#062029] border border-teal-500/30 shadow-xl space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="p-2 rounded-xl bg-teal-500/20 text-teal-300 shrink-0">
+              <CheckSquare className="w-5 h-5 text-teal-400" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-black text-white truncate">
+                Liiska Hawlaha (To-Do)
+              </h2>
+              <p className="text-[11px] text-teal-300/80 font-medium">
+                {completedTasks}/{totalTasks} la qabtay ({completionPercentage}%)
+              </p>
             </div>
-            <h2 className="text-xl sm:text-3xl font-extrabold text-white">
-              Hawlahaaga, Waqtiga &amp; Sawirrada
-            </h2>
-            <p className="text-xs sm:text-sm text-teal-200/80 font-medium mt-1">
-              Qorsheyso cibaadadaada iyo shaqadaada, u xiro saacad xusuusin ah (⏰), kuna lifaaq sawirro.
-            </p>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full md:w-auto">
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="flex-1 md:flex-initial px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-xs sm:text-sm hover:brightness-110 shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 active:scale-95 touch-manipulation cursor-pointer"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Ku Dar Hawl Faahfaahsan</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Progress Bar & Counters */}
-        <div className="mt-5 pt-4 border-t border-teal-500/20 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
-          <div className="p-3 rounded-2xl bg-black/30 border border-teal-500/20">
-            <div className="text-[11px] font-bold text-slate-400">Wadarta Hawlaha</div>
-            <div className="text-xl sm:text-2xl font-black text-white font-mono">{totalTasks}</div>
-          </div>
-          <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30">
-            <div className="text-[11px] font-bold text-emerald-400">La Qabtay ✓</div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-300 font-mono">
-              {completedTasks}
-            </div>
-          </div>
-          <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/30">
-            <div className="text-[11px] font-bold text-amber-400">Qabyo ah</div>
-            <div className="text-xl sm:text-2xl font-black text-amber-300 font-mono">
-              {pendingTasks}
-            </div>
-          </div>
-          <div className="p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30">
-            <div className="text-[11px] font-bold text-cyan-400">Heerka Guusha</div>
-            <div className="text-xl sm:text-2xl font-black text-cyan-300 font-mono">
-              {completionPercentage}%
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black text-xs hover:brightness-110 shadow-md transition flex items-center gap-1.5 active:scale-95 shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Hawl Cusub</span>
+          </button>
         </div>
 
         {/* Visual Progress Line */}
-        <div className="mt-4">
-          <div className="w-full h-2.5 rounded-full bg-black/40 overflow-hidden border border-teal-500/20">
-            <div
-              className="h-full bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 transition-all duration-500 rounded-full"
-              style={{ width: `${completionPercentage}%` }}
-            />
-          </div>
+        <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden border border-teal-500/20">
+          <div
+            className="h-full bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 transition-all duration-500 rounded-full"
+            style={{ width: `${completionPercentage}%` }}
+          />
         </div>
       </div>
 
       {/* Inline Toast Feedback */}
       {localFeedbackMsg && (
-        <div className="p-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-xs sm:text-sm font-bold flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
+        <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-xs font-bold flex items-center justify-between gap-2 shadow-lg animate-in fade-in">
           <span>{localFeedbackMsg}</span>
           <button
             type="button"
@@ -583,347 +548,88 @@ export const ToDoView: React.FC<ToDoViewProps> = ({
         </div>
       )}
 
-      {/* 2. DIRECT INLINE ADD SECTION (Mobile-First, Complete with Time, Date, Photo & Details) */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#0c2e3a] via-[#08242f] to-[#051a22] border-2 border-emerald-400/50 shadow-2xl relative overflow-hidden">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
-              <Plus className="w-5 h-5 stroke-[3] text-emerald-300" />
-            </div>
-            <div>
-              <h3 className="text-sm sm:text-lg font-black text-white flex items-center gap-2 flex-wrap">
-                <span>Ku Dar Hawl Cusub, Waqti &amp; Sawir 📸</span>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full">
-                  Degdeg
-                </span>
-              </h3>
-              <p className="text-xs text-teal-200/80">
-                Ku qor hawshaada hoose, u xulo waqtiga la rabo, oo ku dar liiskaaga hal taabasho.
-              </p>
-            </div>
-          </div>
+      {/* 2. Fast Mobile Quick-Add Bar */}
+      <form
+        onSubmit={handleCreateOrSaveTask}
+        className="p-3 rounded-2xl bg-slate-900/85 border border-teal-500/30 shadow-lg space-y-2.5"
+      >
+        <div className="flex items-center gap-2">
+          <input
+            ref={inlineTitleInputRef}
+            type="text"
+            value={newTaskTitle}
+            onChange={(e) => setNewTaskTitle(e.target.value)}
+            placeholder="✍️ Qor hawl cusub... (t.e. Suuradda Al-Mulk)"
+            className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-black/60 border border-teal-500/35 text-white text-xs sm:text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-semibold"
+          />
+
+          <input
+            type="file"
+            ref={inlineFileInputRef}
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => inlineFileInputRef.current?.click()}
+            disabled={isCompressingImage}
+            className={`p-2.5 rounded-xl border text-xs font-bold transition shrink-0 active:scale-95 cursor-pointer ${
+              newTaskImage
+                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200'
+                : 'bg-slate-800 border-white/10 text-teal-300 hover:text-white'
+            }`}
+            title="Lifaaq Sawir"
+          >
+            <Camera className="w-4 h-4" />
+          </button>
+
+          <button
+            type="submit"
+            className="px-3.5 py-2.5 rounded-xl font-black text-xs bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 hover:brightness-110 shadow active:scale-95 shrink-0 flex items-center gap-1 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Ku dar</span>
+          </button>
         </div>
 
-        <form onSubmit={handleCreateOrSaveTask} className="space-y-3">
-          {/* Main Task Title Input */}
-          <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
-            <div className="relative flex-1">
-              <input
-                ref={inlineTitleInputRef}
-                type="text"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="✍️ Qor magaca hawsha... (Tusaale: Akhrinta Suuradda Al-Mulk, Shaqo...)"
-                className="w-full px-4 py-3.5 rounded-2xl bg-black/60 border border-emerald-400/50 text-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-semibold shadow-inner"
-              />
-            </div>
-
-            {/* Photo Attachment & Submit Button (Full width on mobile for easy thumb tap) */}
-            <div className="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
-              <input
-                type="file"
-                ref={inlineFileInputRef}
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+        {/* Attached Image Preview if selected */}
+        {newTaskImage && (
+          <div className="p-2.5 rounded-xl bg-black/60 border border-emerald-500/30 flex items-center gap-2.5">
+            <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-emerald-400/50 shrink-0 bg-black">
+              <img src={newTaskImage} alt="Preview" className="w-full h-full object-cover" />
               <button
                 type="button"
-                onClick={() => inlineFileInputRef.current?.click()}
-                disabled={isCompressingImage}
-                className={`px-3.5 py-3.5 rounded-2xl border text-xs font-bold transition flex items-center justify-center gap-2 active:scale-95 touch-manipulation cursor-pointer ${
-                  newTaskImage
-                    ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 shadow-md ring-2 ring-emerald-400/30'
-                    : 'bg-teal-500/15 hover:bg-teal-500/25 border-teal-500/35 text-teal-200'
-                }`}
-                title="Dooro ama kaamirada ku qaad sawir"
+                onClick={() => setNewTaskImage(null)}
+                className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/80 text-rose-400"
               >
-                <Camera className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="truncate">
-                  {isCompressingImage
-                    ? 'Diyaarin...'
-                    : newTaskImage
-                    ? '✓ Sawir Diyaar'
-                    : 'Lifaaq Sawir 📸'}
-                </span>
-              </button>
-
-              <button
-                type="submit"
-                className="px-4 sm:px-5 py-3.5 rounded-2xl font-black text-xs transition flex items-center justify-center gap-1.5 shadow-lg active:scale-95 touch-manipulation whitespace-nowrap bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 hover:brightness-110 shadow-emerald-500/30 ring-2 ring-emerald-300/60 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[3] shrink-0" />
-                <span>KUSOO DAR ➕</span>
+                <X className="w-3 h-3" />
               </button>
             </div>
+            <input
+              type="text"
+              value={newTaskImageCaption}
+              onChange={(e) => setNewTaskImageCaption(e.target.value)}
+              placeholder="Faahfaahin kooban oo sawirka ah..."
+              className="flex-1 px-2.5 py-1.5 rounded-lg bg-black/70 border border-white/10 text-white text-xs placeholder:text-slate-500"
+            />
           </div>
+        )}
+      </form>
 
-          {/* Optional Details, Time & Date Row (Mobile-Friendly Grid) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div>
-              <input
-                type="text"
-                value={newTaskDetails}
-                onChange={(e) => setNewTaskDetails(e.target.value)}
-                placeholder="📝 Faahfaahin kooban (Ikhtiyaari)..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-teal-500/30 text-white text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-400"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 bg-black/50 border border-teal-500/30 rounded-xl px-3 py-2">
-              <Calendar className="w-4 h-4 text-teal-400 shrink-0" />
-              <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap">
-                Maalinta:
-              </span>
-              <input
-                type="date"
-                style={{ colorScheme: 'dark' }}
-                value={newTaskDueDate}
-                onChange={(e) => setNewTaskDueDate(e.target.value)}
-                className="w-full bg-transparent text-white text-xs font-mono font-bold focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Direct Mobile Alarm-Style 12-Hour Time & Alaarm Box */}
-          <div className="p-3.5 rounded-2xl bg-black/60 border-2 border-teal-500/40 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  <Clock className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-amber-200 block">
-                    Saacadda &amp; Alaarm-ka Mobile-ka:
-                  </span>
-                  <span className="text-[10px] text-teal-300/80 font-medium">
-                    12-Hour AM/PM Selector (Sida Alaarm-ka)
-                  </span>
-                </div>
-              </div>
-              {newTaskDueTime ? (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono font-black text-amber-300 bg-amber-500/20 px-2.5 py-1 rounded-xl border border-amber-400/40">
-                    ⏰ {format24To12Display(newTaskDueTime)} (Alaarm)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setNewTaskDueTime('')}
-                    className="p-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold"
-                    title="Tirtir saacadda"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <span className="text-[11px] text-slate-400 italic bg-white/5 px-2.5 py-1 rounded-xl border border-white/10">
-                  Aan la dooran (Ikhtiyaari)
-                </span>
-              )}
-            </div>
-
-            {/* 3 Touch Selectors: Saacadda (1-12), Daqiiqadda (00-59), AM/PM */}
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Saacadda
-                </span>
-                <select
-                  value={parse24To12(newTaskDueTime || '09:30').hour12}
-                  onChange={(e) => {
-                    const current = parse24To12(newTaskDueTime || '09:30');
-                    const h = Number(e.target.value);
-                    const time24 = build24TimeFrom12(h, current.minute, current.ampm);
-                    setNewTaskDueTime(time24);
-                  }}
-                  className="w-full bg-slate-900 border border-teal-500/40 rounded-xl px-2.5 py-2.5 text-base font-mono font-black text-white focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
-                >
-                  {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => (
-                    <option key={h} value={h}>
-                      {String(h).padStart(2, '0')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Daqiiqadda
-                </span>
-                <select
-                  value={parse24To12(newTaskDueTime || '09:30').minute}
-                  onChange={(e) => {
-                    const current = parse24To12(newTaskDueTime || '09:30');
-                    const m = Number(e.target.value);
-                    const time24 = build24TimeFrom12(current.hour12, m, current.ampm);
-                    setNewTaskDueTime(time24);
-                  }}
-                  className="w-full bg-slate-900 border border-teal-500/40 rounded-xl px-2.5 py-2.5 text-base font-mono font-black text-white focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer"
-                >
-                  {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
-                    <option key={m} value={m}>
-                      {String(m).padStart(2, '0')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
-                  Xilliga
-                </span>
-                <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-teal-500/40">
-                  {(['AM', 'PM'] as const).map((period) => {
-                    const current = parse24To12(newTaskDueTime || '09:30');
-                    const isSelected = current.ampm === period && !!newTaskDueTime;
-                    return (
-                      <button
-                        key={period}
-                        type="button"
-                        onClick={() => {
-                          const time24 = build24TimeFrom12(current.hour12, current.minute, period);
-                          setNewTaskDueTime(time24);
-                        }}
-                        className={`py-2 rounded-lg font-mono text-xs font-black transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-amber-400 text-slate-950 shadow'
-                            : 'text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        {period}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Quick 1-Tap Presets matching Scene 6 */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-teal-500/20">
-              <span className="text-[10px] font-bold text-teal-300 uppercase">
-                ⚡ Dooro Degdeg:
-              </span>
-              {[
-                { label: '⏰ 09:30 PM (Alaarm)', time: '21:30' },
-                { label: '🌅 04:30 AM (Fajr)', time: '04:30' },
-                { label: '🌞 12:30 PM (Duhur)', time: '12:30' },
-                { label: '🌤️ 03:30 PM (Casar)', time: '15:30' },
-                { label: '🌇 06:00 PM (Maqrib)', time: '18:00' },
-                { label: '🌙 07:45 PM (Cishe)', time: '19:45' },
-              ].map((preset) => (
-                <button
-                  key={preset.time}
-                  type="button"
-                  onClick={() => {
-                    setNewTaskDueTime(preset.time);
-                    onNotify?.(`Waqtiga waxaa loo dejiyay ${preset.label} ✓`);
-                  }}
-                  className={`px-2 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer active:scale-95 ${
-                    newTaskDueTime === preset.time
-                      ? 'bg-amber-400 text-slate-950 border-amber-300 font-black shadow'
-                      : 'bg-white/5 text-slate-300 border-white/10 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Attached Image Preview */}
-          {newTaskImage && (
-            <div className="p-3 rounded-2xl bg-black/60 border border-emerald-500/30 flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-emerald-400/50 shrink-0 bg-black">
-                <img src={newTaskImage} alt="Preview" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setNewTaskImage(null)}
-                  className="absolute top-1 right-1 p-1 rounded-full bg-black/80 text-rose-400 hover:text-rose-200"
-                  title="Ka saar sawirka"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="flex-1 w-full space-y-1.5">
-                <input
-                  type="text"
-                  value={newTaskImageCaption}
-                  onChange={(e) => setNewTaskImageCaption(e.target.value)}
-                  placeholder="Qor qoraal gaaban oo sawirka ah (caption)..."
-                  className="w-full px-3 py-2 rounded-xl bg-black/70 border border-white/10 text-white text-xs placeholder:text-slate-500"
-                />
-                <div className="text-[11px] text-emerald-300 font-semibold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Sawirka waa diyaar. Guji &apos;KUSOO DAR ➕&apos; si aad u keydiso.</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Category Chips & Priority Selector */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-                Qaybta:
-              </span>
-              {CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                const isSelected = newTaskCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setNewTaskCategory(cat.id)}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer touch-manipulation ${
-                      isSelected
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
-                        : 'bg-black/40 text-slate-300 border border-white/10 hover:border-emerald-500/30'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{cat.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Ahmiyadda:
-              </span>
-              <select
-                value={newTaskPriority}
-                onChange={(e) => setNewTaskPriority(e.target.value as TodoPriority)}
-                className="px-3 py-1.5 rounded-xl bg-black/70 border border-teal-500/40 text-white text-xs font-bold focus:outline-none cursor-pointer"
-              >
-                <option value="high">🔴 Degdeg / Sare</option>
-                <option value="medium">🟡 Dhexdhexaad</option>
-                <option value="low">🟢 Caadi</option>
-              </select>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      {/* 3. Quick-Add Islamic & Life Preset Buttons */}
-      <div className="p-4 rounded-3xl bg-gradient-to-r from-[#07202a] to-[#051a22] border border-teal-500/20 shadow-md">
-        <div className="flex items-center gap-2 mb-2.5 text-xs font-bold uppercase tracking-wider text-teal-300/80">
-          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-          <span>Ku dar Hal Taabasho (Hawlo Diini ah &amp; Joogto ah)</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {QUICK_PRESETS.map((preset, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleAddPreset(preset)}
-              className="px-3 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-400/25 text-teal-100 text-xs font-bold transition flex items-center gap-2 active:scale-95 touch-manipulation text-left cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="truncate">{preset.title}</span>
-            </button>
-          ))}
-        </div>
+      {/* 3. Horizontal Scrollable Islamic Presets */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        {QUICK_PRESETS.map((preset, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => handleAddPreset(preset)}
+            className="px-2.5 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-400/25 text-teal-100 text-[11px] font-bold transition flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span>{preset.title}</span>
+          </button>
+        ))}
       </div>
 
       {/* 4. Search, Status Filters, Category Selector & Bulk Actions */}

@@ -10,6 +10,10 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isValidDateKey(dateKey) {
+      return dateKey is string && dateKey.size() == 10 && dateKey.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -18,27 +22,79 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Connection test collection removed for security
-    // match /test/{docId} {
-    //   allow read: if true;
-    // }
+    function isAdminUser() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'ccakiincasan@gmail.com';
+    }
+
+    function hasValidRoleOnCreate() {
+      return !('role' in request.resource.data)
+        || request.resource.data.role in ['musallii', 'mentor']
+        || (request.resource.data.role == 'admin' && isAdminUser());
+    }
+
+    function hasValidRoleOnUpdate() {
+      return !('role' in request.resource.data)
+        || (resource != null && 'role' in resource.data && request.resource.data.role == resource.data.role)
+        || request.resource.data.role in ['musallii', 'mentor']
+        || (request.resource.data.role == 'admin' && isAdminUser());
+    }
+
+    function isValidAdminUserUpdate() {
+      // Admin may edit user docs (e.g. role), but keep size/role bounded.
+      return request.resource.data.keys().size() <= 15
+        && (!('role' in request.resource.data)
+            || request.resource.data.role in ['musallii', 'mentor', 'admin']);
+    }
 
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow create, update: if isOwner(userId) && isValidId(userId);
+      allow get: if isOwner(userId) || isAdminUser();
+      allow list: if isAdminUser();
+      allow create: if isOwner(userId) && isValidId(userId) && hasValidRoleOnCreate() && request.resource.data.keys().size() <= 15;
+      allow update: if (isOwner(userId) && isValidId(userId) && hasValidRoleOnUpdate() && request.resource.data.keys().size() <= 15)
+        || (isAdminUser() && isValidId(userId) && isValidAdminUserUpdate());
       allow delete: if false;
 
       match /days/{dateKey} {
         allow get, list: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidId(dateKey);
+        allow create, update: if isOwner(userId) && isValidDateKey(dateKey) && request.resource.data.keys().size() <= 20;
         allow delete: if isOwner(userId);
       }
 
       match /settings/{settingId} {
         allow get, list: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidId(settingId);
+        allow create, update: if isOwner(userId) && isValidId(settingId) && request.resource.data.keys().size() <= 35;
         allow delete: if isOwner(userId);
       }
+
+      match /fcmTokens/{tokenId} {
+        allow get, list, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidId(tokenId)
+          && request.resource.data.keys().hasOnly(['token', 'updatedAt', 'userAgent', 'prayerTimesUtc', 'lang', 'enabled'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() <= 4096
+          && (!('updatedAt' in request.resource.data) || (request.resource.data.updatedAt is string && request.resource.data.updatedAt.size() <= 64))
+          && (!('userAgent' in request.resource.data) || (request.resource.data.userAgent is string && request.resource.data.userAgent.size() <= 512))
+          && (!('prayerTimesUtc' in request.resource.data) || (request.resource.data.prayerTimesUtc is list && request.resource.data.prayerTimesUtc.size() <= 10))
+          && (!('lang' in request.resource.data) || request.resource.data.lang in ['so', 'en'])
+          && (!('enabled' in request.resource.data) || request.resource.data.enabled is bool);
+      }
+    }
+
+    match /announcements/{announcementId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isAdminUser() && isValidId(announcementId)
+        && request.resource.data.keys().size() <= 20;
+      allow delete: if isAdminUser() && isValidId(announcementId);
+    }
+
+    match /app_config/{configId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isAdminUser() && isValidId(configId)
+        && request.resource.data.keys().size() <= 50;
+      allow delete: if isAdminUser() && isValidId(configId);
     }
   }
 }

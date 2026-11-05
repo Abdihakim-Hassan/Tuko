@@ -40,7 +40,9 @@ export class ErrorBoundary extends Component<Props, State> {
               <button 
                 onClick={() => {
                   try {
-                    localStorage.removeItem('tuko_guest_days');
+                    const activeUid = localStorage.getItem('tuko_active_user_uid') || 'guest';
+                    localStorage.removeItem(`salaad_soomaali_days_v3_${activeUid}`);
+                    localStorage.removeItem('salaad_soomaali_days_v3_guest');
                     sessionStorage.clear();
                   } catch {}
                   this.setState({ hasError: false });

@@ -157,6 +157,8 @@ export interface AppSettings {
   qadaaTracker?: QadaaTrackerData;
   khatmPlan?: KhatmPlanData;
   language?: 'so' | 'en';
+  appTheme?: 'emerald' | 'oled' | 'gold';
+  arabicFontScale?: 'normal' | 'large' | 'xlarge';
   updatedAt?: number;
 }
 
@@ -174,6 +176,41 @@ export interface DikriItem {
   translit: string;
   somali: string;
   count: number;
+}
+
+export interface AppAnnouncement {
+  id: string;
+  title: string;
+  content: string;
+  type: 'info' | 'ramadan' | 'jumco' | 'alert' | 'update';
+  active: boolean;
+  targetAudience?: 'all' | 'male' | 'female';
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface AdminAppConfig {
+  maintenanceMode?: boolean;
+  featureFlags?: {
+    somaliAudioTafsir?: boolean;
+    fcmPushNotifications?: boolean;
+    communityStreaks?: boolean;
+    ramadanSpecialSection?: boolean;
+  };
+  dailyQuote?: {
+    arabic: string;
+    somali: string;
+    source: string;
+  };
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface AdminUserStats {
+  totalUsers: number;
+  maleUsers: number;
+  femaleUsers: number;
+  adminsCount: number;
 }
 
 export interface DailyInspiration {

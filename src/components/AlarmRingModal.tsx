@@ -19,14 +19,9 @@ export const AlarmRingModal: React.FC<AlarmRingModalProps> = ({
   );
 
   useEffect(() => {
-    // Start ringing sound
-    audioAlerts.playAlarm(alarm.sound, alarm.selectedVoice || 'makkah');
-
-    // Trigger phone vibration if supported
-    if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
-      try {
-        navigator.vibrate([600, 300, 600, 300, 1000]);
-      } catch {}
+    // Only start ringing if not already started by App.tsx
+    if (!audioAlerts.isAdhanPlaying()) {
+      audioAlerts.playAlarm(alarm.sound, alarm.selectedVoice || 'makkah');
     }
 
     const timer = setInterval(() => {
@@ -41,9 +36,8 @@ export const AlarmRingModal: React.FC<AlarmRingModalProps> = ({
 
     return () => {
       clearInterval(timer);
-      audioAlerts.stopAlarm();
     };
-  }, [alarm]);
+  }, [alarm.id]);
 
   const handleDismiss = () => {
     audioAlerts.stopAlarm();

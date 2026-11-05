@@ -42,9 +42,11 @@ interface AdhanViewProps {
   prayerTimes: PrayerTimesResult;
   onUpdateSettings?: (updates: Partial<AppSettings>) => void;
   onTriggerAdhaanOverlay: (prayer: PrayerName) => void;
+  onOpenInstallApp?: () => void;
   cityName: string;
   initialSubTab?: 'prayers' | 'clock_alarm' | 'schedule';
   subTabTrigger?: number;
+  sectionMode?: 'adhan' | 'alarm';
 }
 
 export const SHEIKH_VOICES: {
@@ -194,18 +196,29 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
   prayerTimes,
   onUpdateSettings,
   onTriggerAdhaanOverlay,
+  onOpenInstallApp,
   cityName,
-  initialSubTab = 'clock_alarm',
+  initialSubTab = 'prayers',
   subTabTrigger = 0,
+  sectionMode = 'adhan',
 }) => {
-  // Navigation Sub-Tabs — default to 'clock_alarm' so mobile clock & alarms work immediately
-  const [activeSubTab, setActiveSubTab] = useState<'prayers' | 'clock_alarm' | 'schedule'>(initialSubTab);
+  const [isBgKeepAliveOn, setIsBgKeepAliveOn] = useState<boolean>(() =>
+    audioAlerts.isKeepAliveActive()
+  );
+  // Navigation Sub-Tabs — 'prayers' & 'schedule' for Aadaan section, 'clock_alarm' for Alaarm section
+  const [activeSubTab, setActiveSubTab] = useState<'prayers' | 'clock_alarm' | 'schedule'>(
+    sectionMode === 'alarm' ? 'clock_alarm' : initialSubTab === 'clock_alarm' ? 'prayers' : initialSubTab
+  );
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (sectionMode === 'alarm') {
+      setActiveSubTab('clock_alarm');
+    } else if (initialSubTab && initialSubTab !== 'clock_alarm') {
       setActiveSubTab(initialSubTab);
+    } else {
+      setActiveSubTab('prayers');
     }
-  }, [initialSubTab, subTabTrigger]);
+  }, [initialSubTab, subTabTrigger, sectionMode]);
 
   // Currently playing preview voice
   const [playingVoiceId, setPlayingVoiceId] = useState<AdhanVoice | null>(null);
@@ -277,7 +290,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
             time: new Date().toTimeString().slice(0, 5),
             label: '⏰ Waqtigii Saacadda Tirsiga (Timer) Wuu Dhammaaday!',
             enabled: true,
-            sound: 'adhan',
+            sound: 'chime',
             selectedVoice: settings.adhanVoice || 'makkah',
             days: [],
             createdAt: Date.now(),
@@ -291,10 +304,17 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
     return () => clearInterval(interval);
   }, [isTimerRunning, settings.adhanVoice]);
 
-  // Cleanup audio on unmount
+  // Cleanup preview audio on unmount only if a voice preview was active
+  const previewActiveRef = React.useRef(false);
+  useEffect(() => {
+    previewActiveRef.current = playingVoiceId !== null;
+  }, [playingVoiceId]);
+
   useEffect(() => {
     return () => {
-      audioAlerts.stopAlarm();
+      if (previewActiveRef.current) {
+        audioAlerts.stopAlarm();
+      }
     };
   }, []);
 
@@ -589,127 +609,150 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
 
   return (
     <div className="space-y-5 sm:space-y-6 animate-in fade-in pb-16">
-      {/* 1. Header Banner & Mobile-Friendly 3-Column Sub-Tabs Navigation */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-[#052329] via-[#083038] to-[#041d24] border border-teal-500/25 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 text-slate-950 shadow-lg shadow-teal-500/30 shrink-0">
-              <Clock className="w-6 h-6 stroke-[2.5]" />
+      {/* 1. Compact Mobile App Header & Section-Specific Controls */}
+      <div className="p-3.5 sm:p-4 rounded-3xl bg-gradient-to-r from-[#052329] via-[#083038] to-[#041d24] border border-teal-500/25 shadow-xl space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className={`p-2 rounded-xl text-slate-950 shadow-md shrink-0 ${
+                sectionMode === 'alarm'
+                  ? 'bg-gradient-to-br from-rose-400 to-amber-500'
+                  : 'bg-gradient-to-br from-teal-400 to-emerald-500'
+              }`}
+            >
+              {sectionMode === 'alarm' ? (
+                <Bell className="w-5 h-5 stroke-[2.5]" />
+              ) : (
+                <Volume2 className="w-5 h-5 stroke-[2.5]" />
+              )}
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-xl font-black text-white tracking-tight">
-                  Saacadda Nool, Alaarm-ka &amp; Aadaanka
-                </h2>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-md">
-                  Mobile &amp; Tablet Ready
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-teal-200/80 mt-0.5">
-                Saacadda tooska ah, alaarmyo leh codka 8 Shiiq, saacadda tirsiga (Timer), iyo jadwalkaaga salaadda.
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-black text-white tracking-tight truncate">
+                {sectionMode === 'alarm' ? 'Alaarm-ka & Saacadda' : 'Aadaanka & Jadwalka Salaadda'}
+              </h2>
+              <p className="text-[11px] text-teal-300/85 truncate">
+                {sectionMode === 'alarm'
+                  ? 'Toosinta Salaadda • Saacadda Nool & Timer'
+                  : '8 Cod oo Shiiqyo ah • Jadwalka Salaadaha'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+          {sectionMode === 'alarm' ? (
+            <button
+              type="button"
+              onClick={handleOpenAddAlarm}
+              className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition flex items-center gap-1.5 shadow active:scale-95 shrink-0 cursor-pointer"
+              title="Ku dar Alaarm cusub"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>+ Alaarm</span>
+            </button>
+          ) : (
             <button
               type="button"
               onClick={() => onTriggerAdhaanOverlay('Duhur')}
-              className="flex-1 sm:flex-initial justify-center px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 font-bold text-xs transition flex items-center gap-1.5 shadow active:scale-95 touch-manipulation cursor-pointer"
+              className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 font-bold text-xs transition flex items-center gap-1.5 shadow active:scale-95 shrink-0 cursor-pointer"
               title="Tijaabi shaashadda weyn ee aadaanka"
             >
-              <Bell className="w-4 h-4 fill-current" />
-              <span>Tijaabi Aadaanka 🔔</span>
+              <Bell className="w-3.5 h-3.5 fill-current" />
+              <span>Tijaabi 🔔</span>
+            </button>
+          )}
+        </div>
+
+        {/* Clean 2-Column Segmented Control for Aadaan Section (Codadka vs Jadwalka) */}
+        {sectionMode !== 'alarm' && (
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-black/45 border border-teal-500/20">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('prayers')}
+              className={`py-2 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeSubTab === 'prayers'
+                  ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow font-black'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Codadka Aadaanka (8 Shiiq)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('schedule')}
+              className={`py-2 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                activeSubTab === 'schedule'
+                  ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow font-black'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Jadwalka Salaadda</span>
             </button>
           </div>
-        </div>
+        )}
 
-        {/* Sub-Tabs Navigation */}
-        <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-black/40 border border-teal-500/20">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('clock_alarm')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeSubTab === 'clock_alarm'
-                ? 'bg-gradient-to-r from-amber-400 via-teal-400 to-emerald-400 text-slate-950 shadow-lg font-black'
-                : 'text-slate-300 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Clock className="w-4 h-4 shrink-0" />
-            <span>Saacadda &amp; Alaarm ⏰</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('prayers')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeSubTab === 'prayers'
-                ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-lg font-black'
-                : 'text-slate-300 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Radio className="w-4 h-4 shrink-0" />
-            <span>Codadka Salaadaha (5) 🕌</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('schedule')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer ${
-              activeSubTab === 'schedule'
-                ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-lg font-black'
-                : 'text-slate-300 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Sliders className="w-4 h-4 shrink-0" />
-            <span>Jadwalka Waqtiga</span>
-          </button>
-        </div>
-
-        {/* Global Volume & Notifications Bar */}
-        <div className="pt-2 border-t border-teal-500/15 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs">
-          <div className="flex items-center gap-2.5">
+        {/* Compact Volume & Notification Status Row */}
+        <div className="pt-2 border-t border-teal-500/15 flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <button
               type="button"
               onClick={() => handleVolumeChange(volume === 0 ? 100 : 0)}
-              className="p-2 rounded-xl bg-black/40 text-teal-300 hover:text-white border border-teal-500/20 transition cursor-pointer"
+              className="p-1.5 rounded-lg bg-black/40 text-teal-300 hover:text-white border border-teal-500/20 transition cursor-pointer shrink-0"
               title="Codka xir ama fur"
             >
-              {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
             </button>
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-              <span className="text-slate-300 font-bold text-[11px] whitespace-nowrap">Codka Guud:</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="w-full sm:w-32 accent-teal-400 cursor-pointer"
-              />
-              <span className="font-mono text-teal-300 font-bold text-[11px] w-9 text-right">
-                {volume}%
-              </span>
-            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={volume}
+              onChange={(e) => handleVolumeChange(Number(e.target.value))}
+              className="w-full max-w-[110px] accent-teal-400 cursor-pointer"
+            />
+            <span className="font-mono text-teal-300 font-bold text-[11px] shrink-0">
+              {volume}%
+            </span>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2">
-            <span className="text-slate-300 text-[11px]">Digniinta Mobile-ka:</span>
-            {isNotificationGranted() ? (
-              <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[11px] flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" />
-                <span>Waa Furan Tahay</span>
+          <div className="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
+            <button
+              type="button"
+              onClick={async () => {
+                audioAlerts.unlockAudio();
+                audioAlerts.setKeepAliveEnabled(true);
+                await audioAlerts.requestWakeLock();
+                await requestNotificationPermission();
+                setIsBgKeepAliveOn(true);
+                setSaveSuccessMsg(
+                  '⚡ Heeganka Aadaanka (24/7 Background Mode) waa la shiday! Xitaa haddii shaashaddu xirantahay Aadaanku si toos ah ayuu u yeerayaa.'
+                );
+                setTimeout(() => setSaveSuccessMsg(null), 4000);
+              }}
+              className={`px-2.5 py-1 rounded-xl font-bold text-[11px] flex items-center gap-1 transition cursor-pointer active:scale-95 ${
+                isBgKeepAliveOn && isNotificationGranted()
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
+                  : 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/40 animate-pulse'
+              }`}
+              title="Shid Heeganka Aadaanka 24/7 si uu u dhaco xitaa marka shaashaddu dansan tahay"
+            >
+              <Zap className="w-3 h-3 fill-current" />
+              <span>
+                {isBgKeepAliveOn && isNotificationGranted()
+                  ? 'Heeganka 24/7 Waa Furan ✓'
+                  : 'Shid Heeganka Aadaanka ⚡'}
               </span>
-            ) : (
+            </button>
+
+            {onOpenInstallApp && (
               <button
                 type="button"
-                onClick={async () => {
-                  audioAlerts.unlockAudio();
-                  await requestNotificationPermission();
-                }}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-bold text-[11px] transition cursor-pointer active:scale-95"
+                onClick={onOpenInstallApp}
+                className="px-2.5 py-1 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-200 border border-teal-400/35 font-bold text-[11px] transition cursor-pointer active:scale-95"
+                title="Ku shub App-ka Mobile-kaaga iyo Computer-kaaga"
               >
-                Furo Digniinta (Bell) 🔔
+                📲 Ku Shub App-ka
               </button>
             )}
           </div>

@@ -4,8 +4,15 @@ import { AdhanVoice } from '../types';
 
 type AutoplayListener = (blocked: boolean) => void;
 
+// 1-second silent PCM WAV data URI used to bless HTMLAudioElement & keep mobile/desktop background audio alive
+const SILENT_WAV_DATA_URI =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 class AudioManager {
   private persistentAudio: HTMLAudioElement | null = null;
+  private keepAliveAudio: HTMLAudioElement | null = null;
+  private htmlAudioBlessed = false;
+  private keepAliveEnabled = true;
   private volumeLevel = 1.0;
   private preloaded = false;
   private unlocked = false;
@@ -22,32 +29,122 @@ class AudioManager {
   private isStartingPlay = false;
   private playPromise: Promise<void> | null = null;
   private playRequestId = 0;
+  private userStoppedUntilMs = 0;
+
+  private static getCurrentHHmm(): string {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  public silenceCurrentMinuteInNative(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const hhmm = AudioManager.getCurrentHHmm();
+      localStorage.setItem('tuko_silenced_hhmm', hhmm);
+      localStorage.setItem('tuko_silenced_ts', String(Date.now()));
+      if ((window as any).TukoNative?.schedulePrayerTimes) {
+        (window as any).TukoNative.schedulePrayerTimes('[]');
+      }
+    } catch {}
+  }
+
+  public isMinuteSilenced(time24?: string): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const targetHHmm = time24 && time24.trim() ? time24.trim() : AudioManager.getCurrentHHmm();
+      if (Date.now() < this.userStoppedUntilMs && targetHHmm === AudioManager.getCurrentHHmm()) {
+        return true;
+      }
+      const silencedHHmm = localStorage.getItem('tuko_silenced_hhmm') || '';
+      const silencedTs = Number(localStorage.getItem('tuko_silenced_ts') || '0');
+      if (silencedHHmm === targetHHmm && Date.now() - silencedTs < 120_000) {
+        return true;
+      }
+      if (typeof (window as any).TukoNative?.isMinuteSilencedOrFired === 'function') {
+        if ((window as any).TukoNative.isMinuteSilencedOrFired(targetHHmm)) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  }
 
   constructor() {
     if (typeof window !== 'undefined') {
-      // Setup aggressive, persistent unlock on all common interaction events
-      const unlockEvents = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown', 'mousedown'];
+      // Sanitize TukoNative schedule arrays passed through JSON.stringify so:
+      // 1) Tomorrow's items (_1) never carry time24 into today's clockMatch check
+      // 2) Any minute already triggered or stopped by the user is excluded for the rest of that minute
+      try {
+        const origStringify = window.JSON.stringify;
+        if (!(window as any).__tukoJsonPatched) {
+          (window as any).__tukoJsonPatched = true;
+          window.JSON.stringify = function (value: any, replacer?: any, space?: any): string {
+            try {
+              if (
+                Array.isArray(value) &&
+                value.length > 0 &&
+                value[0] &&
+                typeof value[0] === 'object' &&
+                'prayer' in value[0] &&
+                'timestamp' in value[0]
+              ) {
+                const nowHHmm = AudioManager.getCurrentHHmm();
+                const silencedHHmm = localStorage.getItem('tuko_silenced_hhmm') || '';
+                const silencedTs = Number(localStorage.getItem('tuko_silenced_ts') || '0');
+                const isCurrentMinSilenced =
+                  silencedHHmm === nowHHmm && Date.now() - silencedTs < 120_000;
+
+                const sanitized = value
+                  .filter((item: any) => {
+                    if (!item) return false;
+                    if (isCurrentMinSilenced && item.time24 === nowHHmm) {
+                      return false;
+                    }
+                    return true;
+                  })
+                  .map((item: any) => {
+                    if (item && typeof item.id === 'string' && item.id.endsWith('_1')) {
+                      return { ...item, time24: '' };
+                    }
+                    return item;
+                  });
+
+                // Suppress MainActivity's 3-second polling loop if App.tsx already synced,
+                // and deduplicate identical schedules so TukoNative.schedulePrayerTimes("")
+                // returns early without re-posting the foreground service notification!
+                const firstId = sanitized[0] && typeof sanitized[0].id === 'string' ? sanitized[0].id : '';
+                const isFromMainActivityPoll = firstId === 'Fajr_0' || firstId === 'Duhur_0';
+                if (isFromMainActivityPoll && (window as any).__tukoLastScheduleJson) {
+                  return '';
+                }
+
+                const resultJson = origStringify.call(window.JSON, sanitized, replacer, space);
+                if ((window as any).__tukoLastScheduleJson === resultJson) {
+                  return '';
+                }
+                (window as any).__tukoLastScheduleJson = resultJson;
+                return resultJson;
+              }
+            } catch {}
+            return origStringify.call(window.JSON, value, replacer, space);
+          };
+        }
+      } catch {}
+
+      // Setup clean, non-intrusive Web Audio API unlock on interaction events
+      const unlockEvents = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown'];
       const triggerUnlock = () => {
         this.unlockAudio();
-        if (this.pendingPlay) {
-          const fn = this.pendingPlay;
-          this.pendingPlay = null;
-          try {
-            fn();
-          } catch {}
-        }
       };
 
       unlockEvents.forEach((ev) => {
         window.addEventListener(ev, triggerUnlock, { capture: true, passive: true });
       });
 
-      // Handle visibility changes to resume audio context if suspended
+      // Handle visibility changes: never auto-play stale WebAudio alarms when returning from background
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          if (this.audioCtx && this.audioCtx.state === 'suspended') {
-            this.audioCtx.resume().catch(() => {});
-          }
+        if (document.visibilityState !== 'visible' && (window as any).TukoNative) {
+          this.clearTimersOnly();
         }
       });
 
@@ -66,7 +163,7 @@ class AudioManager {
         } catch {}
       };
       window.addEventListener('beforeunload', releaseOnUnload);
-      window.addEventListener('pagehide', releaseOnUnload);
+      // NOTE: Never attach releaseOnUnload to pagehide — pagehide fires when phone screen locks, which would kill background audio!
     }
   }
 
@@ -193,11 +290,11 @@ class AudioManager {
     });
   }
 
-  // Pre-warms audio permissions on user interactions (button click, touch)
+  // Pre-warms audio permissions safely without playing or leaking any adhan sound
   unlockAudio(): void {
     if (typeof window === 'undefined') return;
 
-    // 1. Unlock Web Audio API context
+    // 1. Safely unlock Web Audio API context
     try {
       const AudioCtx =
         window.AudioContext ||
@@ -210,7 +307,7 @@ class AudioManager {
           this.audioCtx.resume().catch(() => {});
         }
 
-        // Play 1 silent buffer to permanently unlock on iOS Safari
+        // Silent single sample to permanently satisfy iOS WebAudio gesture requirement
         if (this.audioCtx.state === 'running' || this.audioCtx.state === 'suspended') {
           const buffer = this.audioCtx.createBuffer(1, 1, 22050);
           const source = this.audioCtx.createBufferSource();
@@ -221,23 +318,84 @@ class AudioManager {
       }
     } catch {}
 
-    // 2. Prime HTMLAudioElement with silent audio
+    // 2. Bless persistent HTMLAudioElement on first user gesture so timer-triggered Adhan NEVER gets blocked!
+    if (!this.htmlAudioBlessed && !this.isCurrentlyPlaying && !this.isStartingPlay) {
+      try {
+        const audio = this.getAudio();
+        if (audio && (!audio.src || audio.paused)) {
+          const prevSrc = audio.src;
+          audio.src = SILENT_WAV_DATA_URI;
+          audio.volume = 0.001;
+          const p = audio.play();
+          if (p && typeof p.then === 'function') {
+            p.then(() => {
+              this.htmlAudioBlessed = true;
+              if (!this.isCurrentlyPlaying && !this.isStartingPlay) {
+                audio.pause();
+                audio.volume = this.volumeLevel;
+                if (prevSrc && !prevSrc.startsWith('data:audio/wav')) {
+                  audio.src = prevSrc;
+                }
+              }
+            }).catch(() => {});
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Start background keep-alive audio loop so Mobile (screen locked) & Desktop (minimized) never sleep
+    if (this.keepAliveEnabled) {
+      this.startKeepAliveLoop();
+    }
+
+    // 4. If an Adhan was waiting for user gesture, play it immediately now!
+    if (this.pendingPlay) {
+      const fn = this.pendingPlay;
+      this.pendingPlay = null;
+      setTimeout(() => fn(), 20);
+    }
+
+    this.unlocked = true;
+    this.setAutoplayBlocked(false);
+  }
+
+  private startKeepAliveLoop(): void {
+    if (typeof window === 'undefined') return;
     try {
-      const audio = this.getAudio();
-      if (audio && !this.unlocked) {
-        audio.volume = this.volumeLevel;
-        const silentAudio = new Audio(
-          'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA'
-        );
-        silentAudio.volume = 0.01;
-        silentAudio.play().then(() => {
-          this.unlocked = true;
-          this.setAutoplayBlocked(false);
-        }).catch(() => {});
-      } else if (this.unlocked) {
-        this.setAutoplayBlocked(false);
+      if (!this.keepAliveAudio) {
+        this.keepAliveAudio = new Audio(SILENT_WAV_DATA_URI);
+        this.keepAliveAudio.loop = true;
+        this.keepAliveAudio.volume = 0.0001;
+        (this.keepAliveAudio as unknown as { playsInline?: boolean }).playsInline = true;
+      }
+      if (this.keepAliveAudio.paused) {
+        this.keepAliveAudio.play().catch(() => {});
+      }
+      if ('mediaSession' in navigator && !this.isCurrentlyPlaying) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'Heeganka Aadaanka (24/7)',
+            artist: 'Tuko • Salaad & Adhkaar',
+            album: 'Waqtiyada Salaadda',
+          });
+        } catch {}
       }
     } catch {}
+  }
+
+  setKeepAliveEnabled(enabled: boolean): void {
+    this.keepAliveEnabled = enabled;
+    if (enabled) {
+      this.startKeepAliveLoop();
+    } else if (this.keepAliveAudio) {
+      try {
+        this.keepAliveAudio.pause();
+      } catch {}
+    }
+  }
+
+  isKeepAliveActive(): boolean {
+    return !!(this.keepAliveAudio && !this.keepAliveAudio.paused);
   }
 
   // Request screen wake lock so the phone stays awake during alarm/adhan
@@ -289,62 +447,42 @@ class AudioManager {
     } catch {}
   }
 
-  // Melodic Adhan chime fallback if MP3 fails to load or is blocked
-  playAdhanFallbackChime(): void {
-    console.log('[AudioAlerts] Playing fallback chime');
-    if (typeof window === 'undefined') return;
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = this.audioCtx || new AudioCtx();
-      this.audioCtx = ctx;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-
-      // Adhan inspired melodic sequence (Allahu Akbar tones)
-      const notes = [293.66, 329.63, 392.0, 440.0, 392.0, 329.63];
-      notes.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.value = freq;
-        const startTime = ctx.currentTime + idx * 0.4;
-        gain.gain.setValueAtTime(0.001, startTime);
-        gain.gain.linearRampToValueAtTime(0.3 * this.volumeLevel, startTime + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(startTime);
-        osc.stop(startTime + 0.4);
-      });
-    } catch {}
-  }
-
-  // Plays authentic recorded Adhan for any chosen Sheikh/reciter
+  // Plays authentic recorded Adhan for any chosen Sheikh/reciter (never plays synthetic oscillator buzz)
   async playAdhan(
     isFajr = false,
     onEnded?: () => void,
     voice: AdhanVoice = 'makkah'
   ): Promise<boolean> {
-    this.unlockAudio();
     this.requestWakeLock();
     this.currentVoice = voice;
+
+    // 0. If running inside Android Native APK, trigger native hardware player ONLY (never play HTML5 audio simultaneously!)
+    if (typeof window !== 'undefined' && (window as any).TukoNative?.playAdhanNow) {
+      try {
+        this.silenceCurrentMinuteInNative();
+        (window as any).TukoNative.playAdhanNow(isFajr ? 'Fajr' : 'Adhan', voice);
+        this.isCurrentlyPlaying = true;
+        this.isStartingPlay = false;
+        return true;
+      } catch (err) {
+        console.warn('Native Adhan trigger notice:', err);
+      }
+    }
 
     const audioSrc = this.getAudioSrcForVoice(voice, isFajr);
     const audio = this.getAudio();
 
     if (!audio) {
-      this.playAdhanFallbackChime();
-      return true;
+      return false;
     }
 
+    audio.muted = false;
+    audio.volume = this.volumeLevel;
+
+    // If any Adhan is already actively playing or starting in the overlay, don't interrupt it!
     const isSameSrc =
       audio.src.endsWith(audioSrc) || audio.src === window.location.origin + audioSrc;
 
-    // If same audio is already playing or currently starting, don't interrupt it with pause()!
     if ((this.isCurrentlyPlaying || this.isStartingPlay) && isSameSrc) {
       if (onEnded) {
         audio.onended = () => {
@@ -369,7 +507,6 @@ class AudioManager {
     this.isStartingPlay = true;
 
     try {
-      // Only pause if switching to a different audio source or not currently starting
       if (!isSameSrc) {
         try {
           audio.pause();
@@ -381,6 +518,7 @@ class AudioManager {
         } catch {}
       }
 
+      audio.muted = false;
       audio.volume = this.volumeLevel;
 
       audio.onended = () => {
@@ -401,6 +539,7 @@ class AudioManager {
         return false;
       }
 
+      this.unlocked = true;
       this.isStartingPlay = false;
       this.isCurrentlyPlaying = true;
       this.setAutoplayBlocked(false);
@@ -411,7 +550,6 @@ class AudioManager {
         this.playPromise = null;
       }
 
-      // If superseded by another playAdhan or stopAdhan request, or interrupted by pause(), ignore cleanly
       const errMsg = String(err?.message || err || '');
       if (
         requestId !== this.playRequestId ||
@@ -423,21 +561,17 @@ class AudioManager {
         return false;
       }
 
-      if (err?.name === 'NotAllowedError') {
-        this.setAutoplayBlocked(true);
-        // Queue this adhan to play on the very next user click
-        this.pendingPlay = () => {
-          this.playAdhan(isFajr, onEnded, voice);
-        };
-        this.playAdhanFallbackChime();
-        // Vibrate to alert user on mobile
-        if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
-          try {
-            navigator.vibrate([400, 200, 400]);
-          } catch {}
-        }
-      } else {
-        this.playAdhanFallbackChime();
+      // If autoplay was blocked by browser policy, queue pendingPlay & sound WebAudio chime immediately
+      this.isCurrentlyPlaying = false;
+      this.pendingPlay = () => {
+        this.playAdhan(isFajr, onEnded, voice);
+      };
+      this.playChimeTone();
+      this.setAutoplayBlocked(true);
+      if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
+        try {
+          navigator.vibrate([400, 200, 400]);
+        } catch {}
       }
       return false;
     }
@@ -672,15 +806,44 @@ class AudioManager {
     } catch {}
   }
 
+  private clearTimersOnly(): void {
+    if (this.alarmInterval) {
+      clearInterval(this.alarmInterval);
+      this.alarmInterval = null;
+    }
+    if (this.vibrationInterval) {
+      clearInterval(this.vibrationInterval);
+      this.vibrationInterval = null;
+    }
+  }
+
   // Plays alarm sound: Repeating and persistent until user taps dismiss or snooze
   playAlarm(
     soundType: 'adhan' | 'chime' | 'soft_bell' | 'digital' | 'classic' | 'gentle_morning' | 'alarm_beep' | 'zen_bowl' | 'wave_soft' | 'morning_bird' = 'adhan',
     voice: AdhanVoice = 'makkah',
     onEnded?: () => void
   ): void {
-    this.stopAlarm();
+    this.clearTimersOnly();
+    this.silenceCurrentMinuteInNative();
     this.unlockAudio();
     this.requestWakeLock();
+
+    // If running inside Native APK and native alarm player is available, use single native audio engine
+    if (typeof window !== 'undefined' && (window as any).TukoNative) {
+      if (typeof (window as any).TukoNative.playAlarmNow === 'function') {
+        try {
+          (window as any).TukoNative.playAlarmNow('Alaarm', voice, soundType);
+          this.isCurrentlyPlaying = true;
+          return;
+        } catch {}
+      } else if (soundType === 'adhan' && typeof (window as any).TukoNative.playAdhanNow === 'function') {
+        try {
+          (window as any).TukoNative.playAdhanNow(voice === 'fajr' ? 'Fajr' : 'Alaarm', voice);
+          this.isCurrentlyPlaying = true;
+          return;
+        } catch {}
+      }
+    }
 
     // Setup repeating mobile vibration
     if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
@@ -732,14 +895,7 @@ class AudioManager {
 
   // Stops any playing alarm (audio, chime, interval, vibration, wakelock)
   stopAlarm(): void {
-    if (this.alarmInterval) {
-      clearInterval(this.alarmInterval);
-      this.alarmInterval = null;
-    }
-    if (this.vibrationInterval) {
-      clearInterval(this.vibrationInterval);
-      this.vibrationInterval = null;
-    }
+    this.clearTimersOnly();
     const audio = this.getAudio();
     if (audio) {
       audio.loop = false;
@@ -748,8 +904,17 @@ class AudioManager {
     this.releaseWakeLock();
   }
 
-  // Stops any playing Adhan immediately
+  // Stops any playing Adhan immediately and silences the current minute in Native ForegroundService
   stopAdhan(): void {
+    this.userStoppedUntilMs = Date.now() + 65_000;
+    this.silenceCurrentMinuteInNative();
+
+    if (typeof window !== 'undefined' && (window as any).TukoNative?.stopAdhan) {
+      try {
+        (window as any).TukoNative.stopAdhan();
+      } catch (_) {}
+    }
+
     this.playRequestId++;
     this.pendingPlay = null;
     this.playPromise = null;
@@ -832,7 +997,13 @@ export function sendBrowserNotification(title: string, body: string, icon = '/pw
             renotify: true,
             requireInteraction: true,
             silent: false,
-          } as NotificationOptions);
+            vibrate: [400, 200, 400, 200, 600],
+            actions: [
+              { action: 'play', title: '📢 Shid Aadaanka' },
+              { action: 'open', title: '🕌 Fur App-ka' },
+            ],
+            data: { url: '/' },
+          } as any);
         })
         .catch(() => {
           new Notification(title, { body, icon });

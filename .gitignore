@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+.aistudio/
+.firebase/
+*.zip
+*.idsig
+*.jks
+users.json
+usb-tools/
+android-native-apk/build/

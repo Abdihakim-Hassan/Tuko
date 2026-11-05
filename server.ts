@@ -9,7 +9,80 @@ const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
 const SYNC_FILE_PATH = path.join(__dirname, '.aistudio', 'cross_device_sync.json');
-const MAX_SCOPES_IN_MEMORY = 2500;
+const MAX_SCOPES_IN_MEMORY = 1000;
+const MAX_DAYS_PER_SCOPE = 400;
+const FIREBASE_PROJECT_ID = 'galvanized-ripple-5b34d';
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeKey(key: string): boolean {
+  return Boolean(key) && typeof key === 'string' && !DANGEROUS_KEYS.has(key);
+}
+
+function isValidDateKey(key: string): boolean {
+  return isSafeKey(key) && /^\d{4}-\d{2}-\d{2}$/.test(key);
+}
+
+function sanitizePlainObject<T extends Record<string, any>>(obj: T): T {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {} as T;
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (!isSafeKey(k)) continue;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      clean[k] = sanitizePlainObject(v);
+    } else {
+      clean[k] = v;
+    }
+  }
+  return clean as T;
+}
+
+function decodeFirebaseUidFromBearer(authHeader?: string): string | null {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7).trim();
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+    const payload = JSON.parse(payloadJson);
+    if (!payload || typeof payload !== 'object') return null;
+    if (payload.aud !== FIREBASE_PROJECT_ID) return null;
+    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now() - 60000) return null;
+    const uid = payload.user_id || payload.sub;
+    return typeof uid === 'string' && uid.length > 0 ? uid : null;
+  } catch {
+    return null;
+  }
+}
+
+function verifyScopeAuthorization(req: express.Request, scope: string): boolean {
+  if (scope.startsWith('user_')) {
+    const expectedUid = scope.slice(5);
+    const tokenUid = decodeFirebaseUidFromBearer(req.headers.authorization);
+    return Boolean(expectedUid && tokenUid && tokenUid === expectedUid);
+  }
+  if (scope.startsWith('guest_')) {
+    const expectedDevice = scope.slice(6);
+    const headerDevice = String(
+      req.headers['x-tuko-device-id'] || req.query.deviceId || req.body?.deviceId || ''
+    ).trim();
+    return Boolean(expectedDevice && headerDevice && expectedDevice === headerDevice);
+  }
+  return false;
+}
+
+// Simple in-memory IP Rate Limiter (120 req/min per IP)
+const ipRateMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(ip: string, maxPerMin = 120): boolean {
+  const now = Date.now();
+  const entry = ipRateMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    if (ipRateMap.size > 5000) ipRateMap.clear();
+    ipRateMap.set(ip, { count: 1, resetAt: now + 60000 });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= maxPerMin;
+}
 
 interface SyncScopeState {
   days: Record<string, any>;
@@ -154,27 +227,98 @@ function broadcastScopeUpdate(scope: string, state: SyncScopeState) {
   }
 }
 
-function resolveEffectiveScope(requestedScope?: string): string {
+function resolveEffectiveScope(requestedScope?: string, deviceId?: string): string {
   const cleaned = String(requestedScope || '').trim();
-  if (!cleaned || cleaned === 'guest') {
-    return 'default_shared';
+  if (cleaned.startsWith('user_') && isSafeKey(cleaned)) {
+    return cleaned.slice(0, 128);
   }
-  // Sanitize scope key length for safety
-  return cleaned.slice(0, 128);
+  if (cleaned.startsWith('guest_') && isSafeKey(cleaned)) {
+    return cleaned.slice(0, 128);
+  }
+  const fallbackDevice = String(deviceId || 'local').replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 48);
+  return `guest_${fallbackDevice || 'default'}`;
 }
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '5mb' }));
+
+  // Standard Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
+  // Limit body payload to prevent memory flooding
+  app.use(express.json({ limit: '1mb' }));
+
+  // API Rate Limiter
+  app.use('/api/', (req, res, next) => {
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp, 150)) {
+      return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+    }
+    next();
+  });
 
   // Lightweight health endpoint
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', activeScopes: Object.keys(syncStore.scopes).length });
   });
 
+  // Explicit PWA Manifest, Service Worker, & App Logo Icon routes
+  const publicDir = path.join(__dirname, 'public');
+  app.get('/manifest.json', (_req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    res.sendFile(path.join(publicDir, 'manifest.json'));
+  });
+
+  app.get('/sw.js', (_req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(publicDir, 'sw.js'));
+  });
+
+  const pwaIconFiles: Record<string, string> = {
+    '/pwa-192x192.png': 'image/png',
+    '/pwa-512x512.png': 'image/png',
+    '/pwa-maskable-192x192.png': 'image/png',
+    '/pwa-maskable-512x512.png': 'image/png',
+    '/apple-touch-icon.png': 'image/png',
+    '/favicon.png': 'image/png',
+    '/favicon.ico': 'image/png',
+    '/icon.svg': 'image/svg+xml',
+  };
+
+  for (const [routePath, mimeType] of Object.entries(pwaIconFiles)) {
+    app.get(routePath, (_req, res) => {
+      const filePath = path.join(publicDir, routePath.slice(1));
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.sendFile(filePath);
+      } else {
+        res.status(404).end();
+      }
+    });
+  }
+
   // 1. Real-Time SSE Stream for instant cross-device updates within the same user scope
   app.get('/api/sync/stream', (req, res) => {
-    const scope = resolveEffectiveScope(String(req.query.scope || 'default_shared'));
+    const rawScope = String(req.query.scope || '');
+    const deviceId = String(req.query.deviceId || '');
+    const scope = resolveEffectiveScope(rawScope, deviceId);
+
+    if (!verifyScopeAuthorization(req, scope)) {
+      return res.status(403).json({ error: 'Unauthorized scope access.' });
+    }
+
+    if (sseClients.size > 200) {
+      return res.status(503).json({ error: 'Server busy. Please poll instead.' });
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -210,13 +354,19 @@ async function startServer() {
 
   // 2. GET current synced state (supports lightweight revision check via ?sinceRevision=)
   app.get('/api/sync', (req, res) => {
-    const scope = resolveEffectiveScope(String(req.query.scope || 'default_shared'));
+    const rawScope = String(req.query.scope || '');
+    const deviceId = String(req.query.deviceId || '');
+    const scope = resolveEffectiveScope(rawScope, deviceId);
+
+    if (!verifyScopeAuthorization(req, scope)) {
+      return res.status(403).json({ error: 'Unauthorized scope access.' });
+    }
+
     const sinceRevision = Number(req.query.sinceRevision ?? -1);
     const target = syncStore.scopes[scope] || createEmptyScope();
 
     res.setHeader('Cache-Control', 'no-store');
 
-    // If client already has the latest revision, return a tiny 50-byte payload instead of full history!
     if (sinceRevision >= 0 && target.revision === sinceRevision) {
       res.json({
         scope,
@@ -250,7 +400,12 @@ async function startServer() {
       customDuas,
     } = req.body || {};
 
-    const scope = resolveEffectiveScope(rawScope);
+    const scope = resolveEffectiveScope(rawScope, deviceId);
+
+    if (!verifyScopeAuthorization(req, scope)) {
+      return res.status(403).json({ error: 'Unauthorized scope access.' });
+    }
+
     if (!syncStore.scopes[scope]) {
       pruneScopesIfNeeded();
       syncStore.scopes[scope] = createEmptyScope();
@@ -261,60 +416,73 @@ async function startServer() {
     const now = Date.now();
 
     if (resetAll) {
-      target.days = days && typeof days === 'object' ? days : {};
-      target.settings = settings || null;
-      target.todos = Array.isArray(todos) ? todos : null;
-      target.customDuas = Array.isArray(customDuas) ? customDuas : null;
+      const cleanDays: Record<string, any> = {};
+      if (days && typeof days === 'object' && !Array.isArray(days)) {
+        for (const [k, v] of Object.entries(days)) {
+          if (isValidDateKey(k) && v && typeof v === 'object') {
+            cleanDays[k] = sanitizePlainObject(v);
+          }
+        }
+      }
+      target.days = cleanDays;
+      target.settings = settings && typeof settings === 'object' ? sanitizePlainObject(settings) : null;
+      target.todos = Array.isArray(todos) ? todos.slice(0, 200).map((t) => sanitizePlainObject(t)) : null;
+      target.customDuas = Array.isArray(customDuas) ? customDuas.slice(0, 100).map((d) => sanitizePlainObject(d)) : null;
       target.updatedAt = now;
       target.revision += 1;
-      target.lastDeviceId = deviceId;
+      target.lastDeviceId = typeof deviceId === 'string' ? deviceId.slice(0, 64) : undefined;
       hasChanges = true;
     } else {
       // Single day explicit update
-      if (dayUpdate && dayUpdate.dateKey && dayUpdate.dayData) {
+      if (dayUpdate && isValidDateKey(dayUpdate.dateKey) && dayUpdate.dayData && typeof dayUpdate.dayData === 'object') {
         const { dateKey, dayData } = dayUpdate;
         target.days[dateKey] = {
-          ...dayData,
-          updatedAt: dayData.updatedAt || now,
+          ...sanitizePlainObject(dayData),
+          updatedAt: Number(dayData.updatedAt) || now,
         };
         hasChanges = true;
       }
 
-      // Bulk days merge
-      if (days && typeof days === 'object') {
+      // Bulk days merge (with validation against prototype pollution & invalid keys)
+      if (days && typeof days === 'object' && !Array.isArray(days)) {
+        let dayCount = Object.keys(target.days).length;
         for (const [dKey, incomingDay] of Object.entries(days)) {
-          if (!incomingDay || typeof incomingDay !== 'object') continue;
+          if (!isValidDateKey(dKey) || !incomingDay || typeof incomingDay !== 'object') continue;
+          if (dayCount > MAX_DAYS_PER_SCOPE) break;
+
           const existingDay = target.days[dKey];
+          const sanitizedIncoming = sanitizePlainObject(incomingDay);
 
           if (!existingDay) {
-            if (isExplicitAction || isDayMeaningful(incomingDay) || Object.keys(target.days).length === 0) {
+            if (isExplicitAction || isDayMeaningful(sanitizedIncoming) || Object.keys(target.days).length === 0) {
               target.days[dKey] = {
-                ...incomingDay,
-                updatedAt: (incomingDay as any).updatedAt || now,
+                ...sanitizedIncoming,
+                updatedAt: (sanitizedIncoming as any).updatedAt || now,
               };
+              dayCount++;
               hasChanges = true;
             }
           } else {
-            const incomingTs = Number((incomingDay as any).updatedAt) || 0;
+            const incomingTs = Number((sanitizedIncoming as any).updatedAt) || 0;
             const existingTs = Number(existingDay.updatedAt) || 0;
-            const incomingMeaningful = isDayMeaningful(incomingDay);
+            const incomingMeaningful = isDayMeaningful(sanitizedIncoming);
             const existingMeaningful = isDayMeaningful(existingDay);
 
             if (isExplicitAction && incomingTs >= existingTs) {
               target.days[dKey] = {
-                ...incomingDay,
+                ...sanitizedIncoming,
                 updatedAt: incomingTs || now,
               };
               hasChanges = true;
             } else if (!existingMeaningful && incomingMeaningful) {
               target.days[dKey] = {
-                ...incomingDay,
+                ...sanitizedIncoming,
                 updatedAt: incomingTs || now,
               };
               hasChanges = true;
             } else if (incomingMeaningful && incomingTs > existingTs) {
               target.days[dKey] = {
-                ...incomingDay,
+                ...sanitizedIncoming,
                 updatedAt: incomingTs,
               };
               hasChanges = true;
@@ -324,13 +492,14 @@ async function startServer() {
       }
 
       // Settings update
-      if (settings && typeof settings === 'object') {
-        const incomingTs = Number(settings.updatedAt) || 0;
+      if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
+        const cleanSettings = sanitizePlainObject(settings);
+        const incomingTs = Number(cleanSettings.updatedAt) || 0;
         const existingTs = Number(target.settings?.updatedAt) || 0;
         if (isExplicitAction || !target.settings || incomingTs > existingTs) {
           target.settings = {
             ...(target.settings || {}),
-            ...settings,
+            ...cleanSettings,
             updatedAt: isExplicitAction ? now : incomingTs || now,
           };
           hasChanges = true;
@@ -340,7 +509,7 @@ async function startServer() {
       // Todos update
       if (Array.isArray(todos)) {
         if (isExplicitAction || !target.todos) {
-          target.todos = todos;
+          target.todos = todos.slice(0, 200).map((t) => sanitizePlainObject(t));
           hasChanges = true;
         }
       }
@@ -348,7 +517,7 @@ async function startServer() {
       // Custom Duas update
       if (Array.isArray(customDuas)) {
         if (isExplicitAction || !target.customDuas) {
-          target.customDuas = customDuas;
+          target.customDuas = customDuas.slice(0, 100).map((d) => sanitizePlainObject(d));
           hasChanges = true;
         }
       }
@@ -356,7 +525,7 @@ async function startServer() {
       if (hasChanges) {
         target.updatedAt = now;
         target.revision += 1;
-        target.lastDeviceId = deviceId;
+        target.lastDeviceId = typeof deviceId === 'string' ? deviceId.slice(0, 64) : undefined;
       }
     }
 

@@ -14,7 +14,7 @@ export const DEFAULT_ALARMS: CustomAlarm[] = [
     id: 'alarm_default_fajr',
     time: '04:45',
     label: 'Toosidda Salaadda Subax (Fajr)',
-    enabled: true,
+    enabled: false,
     sound: 'adhan',
     selectedVoice: 'fajr',
     days: [],
@@ -23,7 +23,7 @@ export const DEFAULT_ALARMS: CustomAlarm[] = [
   {
     id: 'alarm_default_quran',
     time: '09:00',
-    label: 'Akhriska Qur’aanka Kariimka',
+    label: "Akhriska Qur'aanka Kariimka",
     enabled: false,
     sound: 'chime',
     days: [5], // Friday
@@ -84,13 +84,13 @@ export const DEFAULT_SETTINGS: {
   method: 'MWL',
   asrMethod: 1, // Shafi'i (Standard in Somalia)
   adhanSound: true,
-  prePrayerAlertMinutes: 10,
-  prePrayerSound: true,
+  prePrayerAlertMinutes: 0,
+  prePrayerSound: false,
   notificationsEnabled: false,
   gender: 'male',
   haptic: true,
   ramadanMode: false,
-  useCustomSchedule: true, // Default to true using user's exact personal schedule
+  useCustomSchedule: false,
   customSchedule: DEFAULT_USER_PRAYER_SCHEDULE,
   alarms: DEFAULT_ALARMS,
 };

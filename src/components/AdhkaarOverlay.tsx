@@ -51,10 +51,26 @@ export const AdhkaarOverlay: React.FC<AdhkaarOverlayProps> = ({
   const [isPlayingAdhan, setIsPlayingAdhan] = useState<boolean>(true);
   const [autoAdvanceNotice, setAutoAdvanceNotice] = useState(false);
   const autoAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const beepCtxRef = useRef<AudioContext | null>(null);
 
-  // Sync Adhan playback with audioAlerts without aborting active play
+  // Sync Adhan playback with audioAlerts and real HTMLAudioElement events
   useEffect(() => {
     if (!isOpen) return;
+
+    const audioEl = audioAlerts.getCurrentAudio();
+    const syncState = () => {
+      if (audioEl) {
+        setIsPlayingAdhan(!audioEl.paused && !audioEl.ended);
+      } else {
+        setIsPlayingAdhan(audioAlerts.isAdhanPlaying());
+      }
+    };
+
+    if (audioEl) {
+      audioEl.addEventListener('play', syncState);
+      audioEl.addEventListener('pause', syncState);
+      audioEl.addEventListener('ended', syncState);
+    }
 
     if (audioAlerts.isAdhanPlaying()) {
       setIsPlayingAdhan(true);
@@ -73,23 +89,31 @@ export const AdhkaarOverlay: React.FC<AdhkaarOverlayProps> = ({
     }
 
     return () => {
-      // Do not abruptly cut off adhan if simply transitioning between steps
+      audioAlerts.stopAdhan();
+      if (audioEl) {
+        audioEl.removeEventListener('play', syncState);
+        audioEl.removeEventListener('pause', syncState);
+        audioEl.removeEventListener('ended', syncState);
+      }
     };
-  }, [isOpen]);
+  }, [isOpen, prayer, adhanVoice]);
 
   const toggleAdhan = () => {
     if (isPlayingAdhan) {
       audioAlerts.stopAdhan();
       setIsPlayingAdhan(false);
     } else {
-      audioAlerts.playAdhan(
-        prayer === 'Fajr',
-        () => {
-          setIsPlayingAdhan(false);
-        },
-        adhanVoice
-      );
-      setIsPlayingAdhan(true);
+      audioAlerts
+        .playAdhan(
+          prayer === 'Fajr',
+          () => {
+            setIsPlayingAdhan(false);
+          },
+          adhanVoice
+        )
+        .then((started) => {
+          setIsPlayingAdhan(started);
+        });
     }
   };
 
@@ -201,24 +225,33 @@ export const AdhkaarOverlay: React.FC<AdhkaarOverlayProps> = ({
   const isCurrentStepDone = currentCount >= currentStep.target;
   const isAllDone = steps.every((s) => (counts[s.id] || 0) >= s.target);
 
-  // Play subtle chime sound
-  const playBeep = (freq = 480) => {
-    if (!audioEnabled) return;
+  // Play subtle click sound ONLY when Adhan is NOT playing (so no beep/dhuud ever plays over the Adhan)
+  const playBeep = (freq = 560) => {
+    if (!audioEnabled || isPlayingAdhan || audioAlerts.isAdhanPlaying()) return;
     try {
-      const audioCtx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!beepCtxRef.current) {
+        beepCtxRef.current = new AudioCtx();
+      }
+      const audioCtx = beepCtxRef.current;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = 'sine';
       osc.frequency.value = freq;
-      gain.gain.value = 0.09;
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+      gain.gain.value = 0.04;
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.12);
+      osc.stop(audioCtx.currentTime + 0.08);
     } catch {
-      // Audio permission
+      // Ignore
     }
   };
 
@@ -251,7 +284,7 @@ export const AdhkaarOverlay: React.FC<AdhkaarOverlayProps> = ({
         if (navigator.vibrate) navigator.vibrate([35, 45, 35]);
         triggerAutoAdvance();
       } else {
-        playBeep(480);
+        playBeep(560);
         if (navigator.vibrate) navigator.vibrate(20);
       }
     }
@@ -279,7 +312,7 @@ export const AdhkaarOverlay: React.FC<AdhkaarOverlayProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 w-screen h-[100dvh] max-h-[100dvh] overflow-hidden bg-slate-950 flex flex-col justify-between items-center py-4 sm:py-6 px-4 select-none animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-50 w-screen h-[100dvh] overflow-y-auto overscroll-contain bg-slate-950 select-none animate-in fade-in duration-300">
       {/* Full atmospheric gradient background */}
       <div
         className={`fixed inset-0 pointer-events-none bg-gradient-to-b ${currentTheme.bgGradient} opacity-95`}
@@ -290,208 +323,228 @@ export const AdhkaarOverlay: React.FC<AdhkaarOverlayProps> = ({
         <div className="w-[320px] sm:w-[480px] h-[320px] sm:h-[480px] rounded-full bg-amber-500/10 blur-[130px]" />
       </div>
 
-      {/* Top Floating Controls: Sound, Live Adhan Equalizer & Close */}
-      <div className="relative z-30 w-full max-w-md flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAudioEnabled(!audioEnabled)}
-            className={`p-2 rounded-full border transition ${
-              audioEnabled
-                ? 'bg-white/10 border-white/20 text-white/80'
-                : 'bg-white/5 border-white/10 text-white/30'
-            }`}
-            title={audioEnabled ? 'Codka tasbeexda waa shidan yahay' : 'Codka tasbeexda waa dansan yahay'}
-          >
-            <Volume2 className="w-3.5 h-3.5" />
-          </button>
+      {/* Scrollable Inner Wrapper that fits Laptop & Mobile cleanly */}
+      <div className="relative z-20 min-h-full w-full flex flex-col justify-between items-center gap-3 sm:gap-4 py-3 sm:py-5 px-4">
+        {/* Top Floating Controls: Sound, Live Adhan Equalizer & Close */}
+        <div className="w-full max-w-md flex items-center justify-between px-1 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAudioEnabled(!audioEnabled)}
+              className={`p-2 rounded-full border transition cursor-pointer ${
+                audioEnabled
+                  ? 'bg-white/10 border-white/20 text-white/80'
+                  : 'bg-white/5 border-white/10 text-white/30'
+              }`}
+              title={audioEnabled ? 'Codka tasbeexda waa shidan yahay' : 'Codka tasbeexda waa dansan yahay'}
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+            </button>
 
-          {/* Live Adhan sound status & control */}
+            {/* Live Adhan sound status & control */}
+            <button
+              onClick={toggleAdhan}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold transition shadow-sm cursor-pointer ${
+                isPlayingAdhan
+                  ? 'bg-amber-500/25 border-amber-400/50 text-amber-200 animate-pulse'
+                  : 'bg-amber-500/15 border-amber-400/40 text-amber-200 hover:bg-amber-500/30'
+              }`}
+              title={isPlayingAdhan ? 'Aamusii Aadaanka' : 'Daaro Aadaanka'}
+            >
+              <span className="flex items-center gap-0.5 h-2.5">
+                <span className={`w-0.5 bg-amber-400 rounded-full transition-all ${isPlayingAdhan ? 'h-3 animate-bounce' : 'h-1'}`} />
+                <span className={`w-0.5 bg-amber-400 rounded-full transition-all ${isPlayingAdhan ? 'h-2.5 animate-bounce delay-75' : 'h-1.5'}`} />
+                <span className={`w-0.5 bg-amber-400 rounded-full transition-all ${isPlayingAdhan ? 'h-3.5 animate-bounce delay-150' : 'h-1'}`} />
+              </span>
+              <span className="text-[11px]">
+                {isPlayingAdhan ? 'Aadaanku Wuu Yeerayaa' : '🔊 Daaro Aadaanka'}
+              </span>
+            </button>
+          </div>
+
           <button
-            onClick={toggleAdhan}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold transition shadow-sm ${
-              isPlayingAdhan
-                ? 'bg-amber-500/25 border-amber-400/50 text-amber-200 animate-pulse'
-                : 'bg-white/5 border-white/15 text-white/50 hover:text-white'
-            }`}
-            title={isPlayingAdhan ? 'Aamusii Aadaanka' : 'Daaro Aadaanka'}
+            onClick={() => {
+              audioAlerts.stopAdhan();
+              onClose();
+            }}
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white/80 hover:text-white transition cursor-pointer"
+            title="Xir shaashadda"
           >
-            <span className="flex items-center gap-0.5 h-2.5">
-              <span className={`w-0.5 bg-amber-400 rounded-full transition-all ${isPlayingAdhan ? 'h-3 animate-bounce' : 'h-1'}`} />
-              <span className={`w-0.5 bg-amber-400 rounded-full transition-all ${isPlayingAdhan ? 'h-2.5 animate-bounce delay-75' : 'h-1.5'}`} />
-              <span className={`w-0.5 bg-amber-400 rounded-full transition-all ${isPlayingAdhan ? 'h-3.5 animate-bounce delay-150' : 'h-1'}`} />
-            </span>
-            <span className="text-[11px]">{isPlayingAdhan ? 'Aadaanku Wuu Yeerayaa' : 'Aadaanku Wuu Aamusan Yahay'}</span>
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <button
-          onClick={onClose}
-          className="p-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white/80 hover:text-white transition"
-          title="Xir shaashadda"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
+        {/* TOP HEADER: Time, Prayer Title (Serif), and Poetic Subtitle */}
+        <div className="text-center flex flex-col items-center shrink-0">
+          <span className="text-xs font-medium tracking-widest uppercase text-white/60">
+            {currentTimeFormatted}
+          </span>
+          <h1 className="font-serif-display text-3xl sm:text-4xl text-white font-normal sm:font-medium tracking-tight leading-tight">
+            {currentTheme.titleEnglish}
+          </h1>
+          <p className="font-serif-display italic text-xs text-white/60 mt-0.5 max-w-xs px-2">
+            "{currentTheme.subtitle}"
+          </p>
+        </div>
 
-      {/* TOP HEADER: Time, Prayer Title (Serif), and Poetic Subtitle */}
-      <div className="relative z-20 text-center flex flex-col items-center -mt-2">
-        <span className="text-xs sm:text-sm font-medium tracking-widest uppercase text-white/60 mb-0.5">
-          {currentTimeFormatted}
-        </span>
-        <h1 className="font-serif-display text-4xl sm:text-5xl text-white font-normal sm:font-medium tracking-tight">
-          {currentTheme.titleEnglish}
-        </h1>
-        <p className="font-serif-display italic text-xs sm:text-sm text-white/60 mt-1 max-w-xs px-2">
-          "{currentTheme.subtitle}"
-        </p>
-      </div>
-
-      {/* CENTER CARD: Post-Prayer Dhikr (Compact, responsive, fits on every phone!) */}
-      <div
-        className={`relative z-20 w-full max-w-[380px] rounded-[26px] ${currentTheme.cardBg} backdrop-blur-2xl border p-5 sm:p-6 shadow-2xl flex flex-col items-center text-center my-auto transition-all`}
-      >
-        {/* Card Header Tag */}
-        <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] text-[#d4af37] mb-2">
-          POST-PRAYER DHIKR
-        </span>
-
-        {/* Arabic Text (Adaptive size so it never breaks vertical rhythm) */}
+        {/* CENTER CARD: Post-Prayer Dhikr (Compact, responsive, fits on laptop & phone!) */}
         <div
-          className={`font-arabic font-bold text-amber-100 leading-snug my-1.5 select-none ${
-            currentStep.arabic.length > 50
-              ? 'text-xl sm:text-2xl'
-              : 'text-2xl sm:text-3xl'
-          }`}
-          dir="rtl"
+          className={`w-full max-w-[380px] rounded-[24px] ${currentTheme.cardBg} backdrop-blur-2xl border p-4 sm:p-5 shadow-2xl flex flex-col items-center text-center transition-all shrink-0`}
         >
-          {currentStep.arabic}
-        </div>
+          {/* Card Header Tag */}
+          <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] text-[#d4af37] mb-1.5">
+            POST-PRAYER DHIKR
+          </span>
 
-        {/* Transliteration */}
-        <p className="text-xs sm:text-sm font-medium italic text-white/90 mb-1 max-w-[300px] truncate">
-          {currentStep.translit}
-        </p>
-
-        {/* Somali Translation */}
-        <p className="text-[11px] sm:text-xs text-white/65 leading-relaxed max-w-[280px] mb-4 line-clamp-2">
-          {currentStep.somali}
-        </p>
-
-        {/* Counter Widget: Circular + Button next to Big Number */}
-        <div className="flex items-center justify-center gap-4 my-1">
-          {/* Circular Increment Button */}
-          <button
-            onClick={handleIncrement}
-            disabled={isCurrentStepDone}
-            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-90 ${
-              isCurrentStepDone
-                ? 'bg-emerald-500 text-slate-950 cursor-default'
-                : 'bg-gradient-to-br from-[#dfaf78] to-[#b37d4e] text-slate-950 hover:brightness-110 cursor-pointer'
+          {/* Arabic Text */}
+          <div
+            className={`font-arabic font-bold text-amber-100 leading-snug my-1 select-none ${
+              currentStep.arabic.length > 50
+                ? 'text-xl sm:text-2xl'
+                : 'text-2xl sm:text-3xl'
             }`}
-            title="Taabo si aad u tiriso"
+            dir="rtl"
           >
-            {isCurrentStepDone ? (
-              <Check className="w-7 h-7 stroke-[3]" />
-            ) : (
-              <Plus className="w-7 h-7 stroke-[2.5]" />
-            )}
-          </button>
+            {currentStep.arabic}
+          </div>
 
-          {/* Big Number & Target */}
-          <div className="flex flex-col items-start justify-center min-w-[70px]">
-            <span className="text-4xl sm:text-5xl font-black font-mono text-white/95 leading-none">
-              {currentCount}
-            </span>
-            <span className="text-xs font-semibold text-white/60 mt-1 uppercase tracking-wider">
-              of {currentStep.target}
-            </span>
+          {/* Transliteration */}
+          <p className="text-xs sm:text-sm font-medium italic text-white/90 mb-0.5 max-w-[300px] truncate">
+            {currentStep.translit}
+          </p>
+
+          {/* Somali Translation */}
+          <p className="text-[11px] sm:text-xs text-white/65 leading-relaxed max-w-[280px] mb-3 line-clamp-2">
+            {currentStep.somali}
+          </p>
+
+          {/* Counter Widget: Circular + Button next to Big Number */}
+          <div className="flex items-center justify-center gap-4 my-0.5">
+            {/* Circular Increment Button */}
+            <button
+              onClick={handleIncrement}
+              disabled={isCurrentStepDone}
+              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-90 ${
+                isCurrentStepDone
+                  ? 'bg-emerald-500 text-slate-950 cursor-default'
+                  : 'bg-gradient-to-br from-[#dfaf78] to-[#b37d4e] text-slate-950 hover:brightness-110 cursor-pointer'
+              }`}
+              title="Taabo si aad u tiriso"
+            >
+              {isCurrentStepDone ? (
+                <Check className="w-6 h-6 stroke-[3]" />
+              ) : (
+                <Plus className="w-6 h-6 stroke-[2.5]" />
+              )}
+            </button>
+
+            {/* Big Number & Target */}
+            <div className="flex flex-col items-start justify-center min-w-[65px]">
+              <span className="text-3xl sm:text-4xl font-black font-mono text-white/95 leading-none">
+                {currentCount}
+              </span>
+              <span className="text-[11px] font-semibold text-white/60 mt-1 uppercase tracking-wider">
+                of {currentStep.target}
+              </span>
+            </div>
+          </div>
+
+          {/* Thin progress bar */}
+          <div className="w-full h-1 bg-white/10 rounded-full mt-3 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-400 to-[#dfaf78] rounded-full transition-all duration-200"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* Dot Stepper Indicator */}
+          <div className="flex items-center justify-center gap-1.5 mt-2.5">
+            {steps.map((s, idx) => {
+              const isDone = (counts[s.id] || 0) >= s.target;
+              const isCurrent = idx === currentStepIndex;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setCurrentStepIndex(idx)}
+                  className={`transition-all cursor-pointer ${
+                    isCurrent
+                      ? 'w-5 h-1.5 rounded-full bg-[#dfaf78]'
+                      : isDone
+                      ? 'w-1.5 h-1.5 rounded-full bg-emerald-400'
+                      : 'w-1.5 h-1.5 rounded-full bg-white/20'
+                  }`}
+                  title={s.translit}
+                />
+              );
+            })}
           </div>
         </div>
 
-        {/* Thin progress bar */}
-        <div className="w-full h-1 bg-white/10 rounded-full mt-4 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-amber-400 to-[#dfaf78] rounded-full transition-all duration-200"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
+        {/* BOTTOM SECTION: Big Golden "I've prayed, Wallahi" Button + Kan xiga + Remind Later (10 min / 30 min) */}
+        <div className="w-full max-w-[380px] flex flex-col items-center gap-2 pb-2 shrink-0">
+          {/* Prominent Golden Button */}
+          <button
+            onClick={() => {
+              audioAlerts.stopAdhan();
+              onMarkPrayed(prayer, isSisterMode ? 'early_home' : 'mosque');
+            }}
+            className="w-full py-3 px-5 rounded-2xl bg-gradient-to-r from-[#e3b880] via-[#dfaf78] to-[#c59357] hover:brightness-105 active:scale-98 text-[#2a1708] font-black text-sm sm:text-base shadow-xl shadow-amber-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Check className="w-5 h-5 stroke-[3]" />
+            <span>
+              {isSisterMode
+                ? 'Waan Tukaday (Waqtigeeda Hore 🌸)'
+                : "I've prayed, Wallahi (Waan tukaday)"}
+            </span>
+          </button>
 
-        {/* Dot Stepper Indicator */}
-        <div className="flex items-center justify-center gap-1.5 mt-3">
-          {steps.map((s, idx) => {
-            const isDone = (counts[s.id] || 0) >= s.target;
-            const isCurrent = idx === currentStepIndex;
-            return (
+          {/* Home option & Next Dhikr button */}
+          <div className="flex items-center justify-between w-full px-1">
+            <button
+              onClick={() => {
+                audioAlerts.stopAdhan();
+                onMarkPrayed(prayer, 'home');
+              }}
+              className="text-xs font-semibold text-white/75 hover:text-white transition flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-white/10 cursor-pointer"
+            >
+              <Home className="w-3.5 h-3.5" />
+              <span>Guriga (Waqtiga dambe)</span>
+            </button>
+
+            <button
+              onClick={handleMarkCurrentAsRead}
+              className="text-xs font-bold text-amber-300 hover:text-amber-200 transition py-1 px-2 rounded-lg hover:bg-white/10 cursor-pointer"
+            >
+              Waan aqriyay (Kan xiga) →
+            </button>
+          </div>
+
+          {/* REMIND ME LATER: 10 min & 30 min Dual Pills */}
+          <div className="flex flex-col items-center gap-1 mt-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
+              REMIND ME LATER (XUSUUSIN)
+            </span>
+
+            <div className="flex items-center gap-2 p-1 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md">
               <button
-                key={s.id}
-                onClick={() => setCurrentStepIndex(idx)}
-                className={`transition-all ${
-                  isCurrent
-                    ? 'w-5 h-1.5 rounded-full bg-[#dfaf78]'
-                    : isDone
-                    ? 'w-1.5 h-1.5 rounded-full bg-emerald-400'
-                    : 'w-1.5 h-1.5 rounded-full bg-white/20'
-                }`}
-                title={s.translit}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* BOTTOM SECTION: Big Golden "I've prayed, Wallahi" Button + Remind Later */}
-      <div className="relative z-20 w-full max-w-[380px] flex flex-col items-center gap-2">
-        {/* Prominent Golden Button */}
-        <button
-          onClick={() => onMarkPrayed(prayer, isSisterMode ? 'early_home' : 'mosque')}
-          className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#e3b880] via-[#dfaf78] to-[#c59357] hover:brightness-105 active:scale-98 text-[#2a1708] font-black text-sm sm:text-base shadow-xl shadow-amber-950/40 transition-all flex items-center justify-center gap-2"
-        >
-          <Check className="w-5 h-5 stroke-[3]" />
-          <span>
-            {isSisterMode
-              ? 'Waan Tukaday (Waqtigeeda Hore 🌸)'
-              : "I've prayed, Wallahi (Waan tukaday)"}
-          </span>
-        </button>
-
-        {/* Home option if prayed at home */}
-        <div className="flex items-center justify-between w-full px-1">
-          <button
-            onClick={() => onMarkPrayed(prayer, 'home')}
-            className="text-[11px] font-semibold text-white/60 hover:text-white/90 transition flex items-center gap-1"
-          >
-            <Home className="w-3 h-3" />
-            <span>Guriga (Waqtiga dambe)</span>
-          </button>
-
-          <button
-            onClick={handleMarkCurrentAsRead}
-            className="text-[11px] font-bold text-amber-300 hover:text-amber-200 transition"
-          >
-            Waan aqriyay (Kan xiga) →
-          </button>
-        </div>
-
-        {/* REMIND ME LATER: 10 min & 30 min Dual Pills */}
-        <div className="flex flex-col items-center gap-1.5 mt-1">
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
-            REMIND ME LATER
-          </span>
-
-          <div className="flex items-center gap-2 p-1 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-            <button
-              onClick={() => onSnooze(10, prayer)}
-              className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 active:scale-95 transition"
-            >
-              10 min
-            </button>
-            <div className="w-[1px] h-3.5 bg-white/15" />
-            <button
-              onClick={() => onSnooze(30, prayer)}
-              className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 active:scale-95 transition"
-            >
-              30 min
-            </button>
+                onClick={() => {
+                  audioAlerts.stopAdhan();
+                  onSnooze(10, prayer);
+                }}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white/90 hover:text-white hover:bg-white/15 active:scale-95 transition cursor-pointer"
+              >
+                10 min
+              </button>
+              <div className="w-[1px] h-3.5 bg-white/20" />
+              <button
+                onClick={() => {
+                  audioAlerts.stopAdhan();
+                  onSnooze(30, prayer);
+                }}
+                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white/90 hover:text-white hover:bg-white/15 active:scale-95 transition cursor-pointer"
+              >
+                30 min
+              </button>
+            </div>
           </div>
         </div>
       </div>

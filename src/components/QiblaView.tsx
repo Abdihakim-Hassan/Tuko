@@ -135,46 +135,43 @@ export const QiblaView: React.FC<QiblaViewProps> = ({ settings }) => {
   };
 
   return (
-    <div className="space-y-6 max-w-xl mx-auto">
-      {/* Header Banner */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092e3c] to-[#061d27] border border-teal-500/25 shadow-xl text-center">
-        <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-teal-500/10 border border-teal-400/20 text-teal-300 mb-2">
-          <Compass className="w-7 h-7" />
-        </div>
-        <h2 className="text-xl sm:text-2xl font-black text-white">
-          Jiheeyaha Qiblada (Qibla Compass)
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-md mx-auto">
-          Tilmaamaha tooska ah ee jihada Kacbada Al-Musharrafah (Makkah)
-        </p>
-
-        {/* Current Location Badge */}
-        <div className="flex items-center justify-center gap-2 mt-3.5 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-950/80 border border-teal-400/30 text-teal-200 text-xs font-semibold">
-            <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{locationName}</span>
-          </span>
-
-          <button
-            onClick={handleGetExactGps}
-            disabled={gpsLoading}
-            className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-200 text-xs font-semibold transition active:scale-95 disabled:opacity-50"
-          >
-            <LocateFixed className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{gpsLoading ? 'Baaraya GPS...' : 'Adeegso GPS-kaaga'}</span>
-          </button>
+    <div className="space-y-4 max-w-xl md:max-w-3xl lg:max-w-4xl mx-auto">
+      {/* Compact Header Row */}
+      <div className="p-4 rounded-3xl bg-gradient-to-br from-[#0c2633] via-[#092e3c] to-[#061d27] border border-teal-500/25 shadow-xl flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-2.5 rounded-2xl bg-teal-500/15 border border-teal-400/25 text-teal-300 shrink-0">
+            <Compass className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-black text-white truncate">
+              Jiheeyaha Qiblada
+            </h2>
+            <span className="inline-flex items-center gap-1 text-[11px] text-teal-300 font-semibold truncate">
+              <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span className="truncate">{locationName}</span>
+            </span>
+          </div>
         </div>
 
-        {gpsError && (
-          <p className="text-[11px] text-amber-300 mt-2 flex items-center justify-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            <span>{gpsError}</span>
-          </p>
-        )}
+        <button
+          onClick={handleGetExactGps}
+          disabled={gpsLoading}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-200 text-xs font-bold transition active:scale-95 disabled:opacity-50 shrink-0"
+        >
+          <LocateFixed className="w-3.5 h-3.5 text-emerald-400" />
+          <span>{gpsLoading ? 'GPS...' : 'GPS Toos ah'}</span>
+        </button>
       </div>
 
+      {gpsError && (
+        <p className="text-[11px] text-amber-300 flex items-center justify-center gap-1">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>{gpsError}</span>
+        </p>
+      )}
+
       {/* Main Interactive Compass Display */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-b from-[#0b222c] to-[#07171e] border border-teal-500/30 shadow-2xl flex flex-col items-center relative overflow-hidden">
+      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-[#0b222c] to-[#07171e] border border-teal-500/30 shadow-2xl flex flex-col items-center relative overflow-hidden">
         {/* Glow ambient background */}
         <div
           className={`absolute w-72 h-72 rounded-full blur-3xl transition-all duration-700 pointer-events-none ${

@@ -98,6 +98,41 @@
   font-family: 'Amiri', serif;
 }
 
+/* Dynamic Arabic Font Scaling from Settings */
+[data-arabic-scale="large"] .font-arabic {
+  font-size: 1.25em !important;
+  line-height: 1.85 !important;
+}
+
+[data-arabic-scale="xlarge"] .font-arabic {
+  font-size: 1.48em !important;
+  line-height: 1.95 !important;
+}
+
+/* App Themes: Pure OLED Black & Makkah Gold */
+[data-app-theme="oled"] {
+  background: #000000 !important;
+}
+
+[data-app-theme="oled"] header,
+[data-app-theme="oled"] nav,
+[data-app-theme="oled"] .rounded-3xl {
+  background-image: none !important;
+  background-color: #070709 !important;
+  border-color: rgba(45, 212, 191, 0.22) !important;
+}
+
+[data-app-theme="gold"] header,
+[data-app-theme="gold"] nav {
+  background-color: #120e05 !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+[data-app-theme="gold"] .rounded-3xl {
+  background-image: linear-gradient(to bottom right, #1c1507, #120d04, #0a0702) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
 .font-serif-display {
   font-family: 'Playfair Display', Georgia, serif;
 }
@@ -112,13 +147,17 @@
   display: none;
 }
 
-/* Safe area padding for modern iOS & Android viewports */
+/* Safe area padding for modern iOS & Android viewports (iPhone X..18, Galaxy S20..S26, Pixels) */
 .pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom, 0.5rem), 0.5rem);
+  padding-bottom: max(env(safe-area-inset-bottom, 1.25rem), 1.25rem);
+}
+
+.pb-safe-nav {
+  padding-bottom: max(env(safe-area-inset-bottom, 22px), 22px);
 }
 
 .pt-safe {
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: max(env(safe-area-inset-top, 0px), 0px);
 }
 
 /* Smooth, easy-to-grab vertical & horizontal scrollbar across Laptop, Tablet, and Mobile */

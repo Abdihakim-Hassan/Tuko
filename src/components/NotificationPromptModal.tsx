@@ -584,6 +584,20 @@ export const NotificationPromptModal: React.FC<NotificationPromptModalProps> = (
             </div>
 
             <div className="space-y-2 text-xs">
+              <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40">
+                <span className="p-1.5 rounded-xl bg-amber-500/20 text-amber-300 shrink-0 mt-0.5">
+                  📢
+                </span>
+                <div className="space-y-0.5 min-w-0">
+                  <h4 className="font-bold text-white text-xs sm:text-[13px]">
+                    Marka App-ku Xiran Yahay (Closed App):
+                  </h4>
+                  <p className="text-amber-200/90 text-[11px] leading-snug">
+                    Nidaamka taleefannada (Android &amp; iOS) ma ogola in barnaamij xiran uu cod si qarsoodi ah u shido adigoon taaban. Sidaas darteed, taleefankaagu wuxuu helayaa <strong>Ogaysiis Degdeg ah (Push Notification)</strong> oo wata badhanka <strong>[ 📢 Shid Aadaanka ]</strong>. Markaad taabato ayuu aadaanka buuxa bilaabanayaa. Haddii aad rabto inuu si toos ah u yeero adigoon taaban, app-ka ku hay gadaal (Background-ka).
+                  </p>
+                </div>
+              </div>
+
               <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30">
                 <span className="p-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 shrink-0 mt-0.5">
                   🍏

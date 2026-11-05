@@ -8,9 +8,59 @@ const STORAGE_SETTINGS_KEY = 'salaad_soomaali_settings_v3';
 const STORAGE_CUSTOM_DUAS_KEY = 'salaad_soomaali_custom_duas_v3';
 const STORAGE_TODOS_KEY = 'salaad_soomaali_todos_v3';
 const ACTIVE_USER_UID_KEY = 'tuko_active_user_uid';
+const SAVED_AUTH_USER_KEY = 'tuko_persisted_auth_user_v1';
+
+export interface PersistedAuthUserSnapshot {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+export function savePersistedAuthUser(
+  user: {
+    uid: string;
+    email?: string | null;
+    displayName?: string | null;
+    photoURL?: string | null;
+  } | null
+): void {
+  try {
+    if (!user || !user.uid) {
+      localStorage.removeItem(SAVED_AUTH_USER_KEY);
+      return;
+    }
+    const snapshot: PersistedAuthUserSnapshot = {
+      uid: user.uid,
+      email: user.email || null,
+      displayName: user.displayName || null,
+      photoURL: user.photoURL || null,
+    };
+    localStorage.setItem(SAVED_AUTH_USER_KEY, JSON.stringify(snapshot));
+  } catch (err) {
+    console.error('Error saving persisted auth user:', err);
+  }
+}
+
+export function loadPersistedAuthUser(): PersistedAuthUserSnapshot | null {
+  try {
+    if (localStorage.getItem('tuko_logged_out') === 'true') return null;
+    const raw = localStorage.getItem(SAVED_AUTH_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.uid === 'string' && parsed.uid.trim() && parsed.uid !== 'guest') {
+      return parsed as PersistedAuthUserSnapshot;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 let currentStorageUid: string = (() => {
   try {
+    const persistedUser = loadPersistedAuthUser();
+    if (persistedUser?.uid) return persistedUser.uid;
     return localStorage.getItem(ACTIVE_USER_UID_KEY) || 'guest';
   } catch {
     return 'guest';
@@ -464,6 +514,7 @@ export function exportBackupData(): string {
     days: loadAllDays(),
     settings: loadSettings(),
     customDuas: loadCustomDuas(),
+    todos: loadAllTodos(),
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -471,14 +522,24 @@ export function exportBackupData(): string {
 export function importBackupData(jsonString: string): boolean {
   try {
     const parsed = JSON.parse(jsonString);
-    if (parsed.days && typeof parsed.days === 'object') {
-      saveAllDays(parsed.days);
+    if (!parsed || typeof parsed !== 'object') return false;
+    if (parsed.days && typeof parsed.days === 'object' && !Array.isArray(parsed.days)) {
+      const safeDays: Record<string, DayData> = {};
+      for (const [k, v] of Object.entries(parsed.days)) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k) && v && typeof v === 'object') {
+          safeDays[k] = v as DayData;
+        }
+      }
+      saveAllDays(safeDays);
     }
-    if (parsed.settings && typeof parsed.settings === 'object') {
+    if (parsed.settings && typeof parsed.settings === 'object' && !Array.isArray(parsed.settings)) {
       saveSettings(parsed.settings);
     }
     if (Array.isArray(parsed.customDuas)) {
       saveCustomDuas(parsed.customDuas);
+    }
+    if (Array.isArray(parsed.todos)) {
+      saveAllTodos(parsed.todos);
     }
     return true;
   } catch (err) {
@@ -487,8 +548,146 @@ export function importBackupData(jsonString: string): boolean {
   }
 }
 
+export function hasDayMeaningfulActivity(day?: DayData | null): boolean {
+  if (!day || typeof day !== 'object') return false;
+  if ((Number(day.quran) || 0) > 0) return true;
+  if (Array.isArray(day.quranSurahs) && day.quranSurahs.length > 0) return true;
+  if ((Number(day.tasbeehCount) || 0) > 0) return true;
+  if ((Number(day.fridaySalawatCount) || 0) > 0) return true;
+  if (day.soon || day.fridayKahfRead || day.isExcusedDay) return true;
+  if (day.adhkar && Object.values(day.adhkar).some(Boolean)) return true;
+  if (day.customDuasCompleted && Object.values(day.customDuasCompleted).some(Boolean)) return true;
+  if (day.salaah) {
+    for (const rec of Object.values(day.salaah)) {
+      if (rec && rec.status && rec.status !== 'none') return true;
+      if (rec && rec.reason && rec.reason.trim()) return true;
+    }
+  }
+  return false;
+}
+
+export function mergeTwoDayRecords(local: DayData | undefined, remote: DayData): DayData {
+  if (!local) return remote;
+  if (!remote) return local;
+
+  const parseTs = (val: any): number => {
+    if (!val) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const parsed = new Date(val).getTime();
+    return isNaN(parsed) ? Number(val) || 0 : parsed;
+  };
+
+  const localTs = parseTs(local.updatedAt);
+  const remoteTs = parseTs(remote.updatedAt);
+
+  const mergedSalaah: Record<string, any> = { ...(local.salaah || {}) };
+  for (const [prayer, rec] of Object.entries(remote.salaah || {})) {
+    const localRec = mergedSalaah[prayer];
+    if (!localRec || localRec.status === 'none') {
+      mergedSalaah[prayer] = rec;
+    } else if (rec && rec.status !== 'none') {
+      // If both have a non-none status, prefer the more recently updated record (or keep reason if present)
+      if (remoteTs >= localTs) {
+        mergedSalaah[prayer] = {
+          ...localRec,
+          ...rec,
+          reason: rec.reason || localRec.reason || '',
+        };
+      } else if (!localRec.reason && rec.reason) {
+        mergedSalaah[prayer] = {
+          ...localRec,
+          reason: rec.reason,
+          reasonSavedAt: rec.reasonSavedAt || localRec.reasonSavedAt,
+        };
+      }
+    }
+  }
+
+  const mergedAdhkar = { ...(local.adhkar || {}) };
+  for (const [k, v] of Object.entries(remote.adhkar || {})) {
+    if (v) mergedAdhkar[k] = true;
+  }
+
+  const mergedCustomDuas = { ...(local.customDuasCompleted || {}) };
+  for (const [k, v] of Object.entries(remote.customDuasCompleted || {})) {
+    if (v) mergedCustomDuas[k] = true;
+  }
+
+  const quran = Math.max(Number(local.quran) || 0, Number(remote.quran) || 0);
+  const quranSurahs = Array.from(
+    new Set([...(local.quranSurahs || []), ...(remote.quranSurahs || [])])
+  ).sort((a, b) => a - b);
+  const tasbeehCount = Math.max(Number(local.tasbeehCount) || 0, Number(remote.tasbeehCount) || 0);
+  const fridaySalawatCount = Math.max(
+    Number(local.fridaySalawatCount) || 0,
+    Number(remote.fridaySalawatCount) || 0
+  );
+
+  return {
+    ...local,
+    ...remote,
+    salaah: mergedSalaah as DayData['salaah'],
+    adhkar: mergedAdhkar,
+    customDuasCompleted: mergedCustomDuas,
+    quran,
+    quranSurahs,
+    soon: !!(local.soon || remote.soon),
+    tasbeehCount,
+    fridayKahfRead: !!(local.fridayKahfRead || remote.fridayKahfRead),
+    fridaySalawatCount,
+    isExcusedDay: !!(local.isExcusedDay || remote.isExcusedDay),
+    updatedAt: Math.max(localTs || 0, remoteTs || 0, Date.now()),
+  };
+}
+
+export function loadAndRecoverUserDays(uid: string): Record<string, DayData> {
+  const userDays = loadAllDays(uid);
+  const merged: Record<string, DayData> = { ...userDays };
+  let recoveredAny = false;
+
+  // Also check if any meaningful activity was recorded under 'guest' or legacy unscoped key
+  // (e.g. before login or if a reload briefly switched to guest)
+  try {
+    const guestDays = loadAllDays('guest');
+    for (const [dKey, gDay] of Object.entries(guestDays)) {
+      if (hasDayMeaningfulActivity(gDay)) {
+        const prev = merged[dKey];
+        const next = mergeTwoDayRecords(prev, gDay);
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+          merged[dKey] = next;
+          recoveredAny = true;
+        }
+      }
+    }
+
+    const legacyRaw = localStorage.getItem(STORAGE_DAYS_KEY);
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw);
+      if (legacyParsed && typeof legacyParsed === 'object') {
+        for (const [dKey, lDay] of Object.entries(legacyParsed as Record<string, DayData>)) {
+          if (hasDayMeaningfulActivity(lDay)) {
+            const prev = merged[dKey];
+            const next = mergeTwoDayRecords(prev, lDay);
+            if (JSON.stringify(prev) !== JSON.stringify(next)) {
+              merged[dKey] = next;
+              recoveredAny = true;
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  if (recoveredAny) {
+    saveAllDays(merged, uid);
+  }
+  return merged;
+}
+
 export function clearUserDataOnLogout(): void {
   try {
+    localStorage.setItem('tuko_logged_out', 'true');
+    savePersistedAuthUser(null);
     // Switch storage scope to guest and clear guest workspace so screen starts at 0
     setActiveStorageUser(null);
     localStorage.removeItem(getScopedKey(STORAGE_DAYS_KEY, 'guest'));

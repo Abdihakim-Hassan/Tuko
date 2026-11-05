@@ -1,4 +1,22 @@
 import { AppSettings, CustomDua, DayData, TodoItem } from '../types';
+import { auth } from './firebase';
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    'X-Tuko-Device-Id': DEVICE_ID,
+  };
+  try {
+    if (auth.currentUser) {
+      const token = await auth.currentUser.getIdToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+  } catch {
+    // Proceed with device header if token retrieval fails offline
+  }
+  return headers;
+}
 
 export interface CrossDeviceSyncState {
   days: Record<string, DayData>;
@@ -78,9 +96,13 @@ async function executePushSync(payload: PushSyncPayload): Promise<CrossDeviceSyn
   const timeout = setTimeout(() => controller.abort(), 3500);
 
   try {
+    const authHeaders = await getAuthHeaders();
     const response = await fetch('/api/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
       body: JSON.stringify({
         ...payload,
         deviceId: DEVICE_ID,
@@ -111,7 +133,7 @@ export function pushSyncToServer(
     return executePushSync(payload);
   }
 
-  const scope = payload.scope || 'default_shared';
+  const scope = payload.scope || `guest_${DEVICE_ID}`;
   const existing = pendingPushMap.get(scope);
 
   if (existing) {
@@ -167,9 +189,11 @@ export async function fetchSyncFromServer(
   const timeout = setTimeout(() => controller.abort(), 3000);
 
   try {
-    const url = `/api/sync?scope=${encodeURIComponent(scope)}&sinceRevision=${sinceRevision}`;
+    const authHeaders = await getAuthHeaders();
+    const url = `/api/sync?scope=${encodeURIComponent(scope)}&sinceRevision=${sinceRevision}&deviceId=${encodeURIComponent(DEVICE_ID)}`;
     const response = await fetch(url, {
       cache: 'no-store',
+      headers: authHeaders,
       signal: controller.signal,
     });
     if (!response.ok) return null;

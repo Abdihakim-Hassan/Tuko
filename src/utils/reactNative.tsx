@@ -63,11 +63,11 @@ function getDeviceType(width: number): RNDeviceType {
 function getResponsiveContainerClass(deviceType: RNDeviceType): string {
   switch (deviceType) {
     case 'mobile':
-      return 'w-full max-w-full px-3 sm:px-4 py-4 pb-24';
+      return 'w-full max-w-xl mx-auto px-3 sm:px-4 py-3.5 pb-28';
     case 'tablet':
-      return 'w-full max-w-4xl mx-auto px-5 py-6 pb-24';
+      return 'w-full md:pl-20 max-w-5xl mx-auto px-5 py-5 pb-12';
     case 'laptop':
-      return 'w-full max-w-5xl xl:max-w-6xl mx-auto px-6 py-7 pb-24';
+      return 'w-full lg:pl-64 xl:pl-72 max-w-7xl mx-auto px-6 xl:px-8 py-6 pb-12';
   }
 }
 
