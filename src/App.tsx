@@ -304,7 +304,7 @@ export default function App() {
   );
   const lastVisibleTickRef = useRef<number>(Date.now());
 
-  // Load persisted notified events & suppress any prayer/alarm that already started before entering the app
+  // Load persisted notified events & suppress prayers that already passed (> 5 min ago) on initial mount
   useEffect(() => {
     try {
       const storedPrayers = localStorage.getItem(`tuko_notified_prayers_${todayKey}`);
@@ -317,8 +317,6 @@ export default function App() {
       }
     } catch {}
 
-    // On app mount, mark any prayer or alarm whose scheduled time has ALREADY arrived as notified
-    // so if the user dismissed an alarm/adhan outside the app and then opens the app, it NEVER rings again!
     const now = new Date();
     const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
     const currentTotalMin = now.getHours() * 60 + now.getMinutes();
@@ -332,7 +330,7 @@ export default function App() {
         const diffInMinutes = (currentDecimalHour - prayerDecimalHour) * 60;
         const schedMin = Math.round(prayerDecimalHour * 60);
         const notificationKey = `${todayKey}_${p}_${schedMin}`;
-        if (diffInMinutes >= 0 && !notifiedPrayersRef.current[notificationKey]) {
+        if (diffInMinutes > 5.0 && !notifiedPrayersRef.current[notificationKey]) {
           notifiedPrayersRef.current[notificationKey] = true;
           updatedPrayers = true;
         }
@@ -348,7 +346,7 @@ export default function App() {
       const diffAlarmMin = currentTotalMin - alarmTotalMin;
       const alarmMinuteStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), aH, aM, 0, 0).getTime();
       const createdBeforeMinuteStart = !alarm.createdAt || alarm.createdAt < alarmMinuteStartMs;
-      if ((diffAlarmMin > 0 || (diffAlarmMin === 0 && createdBeforeMinuteStart && now.getSeconds() >= 2))) {
+      if (diffAlarmMin > 0 || (diffAlarmMin === 0 && createdBeforeMinuteStart && now.getSeconds() >= 3)) {
         const alarmKey = `${todayKey}_alarm_${alarm.id}_${alarm.time}`;
         if (!notifiedAlarmsRef.current[alarmKey]) {
           notifiedAlarmsRef.current[alarmKey] = true;
@@ -367,7 +365,8 @@ export default function App() {
         localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
       } catch {}
     }
-  }, [todayKey, settings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayKey]);
 
   // Handle Adhan playback when opened from a lock-screen Push Notification or Service Worker
   useEffect(() => {
@@ -1177,8 +1176,18 @@ export default function App() {
   useEffect(() => {
     const userAlarmsList = Array.isArray(settings.alarms) ? settings.alarms : DEFAULT_ALARMS;
 
-    // Silently marks any prayer, custom alarm, or todo that is currently in its trigger window
-    // as already notified so returning from outside the app NEVER re-triggers it inside the app.
+    // Reload notified maps from localStorage in case user updated a prayer schedule or alarm time
+    try {
+      const savedPrayers = localStorage.getItem(`tuko_notified_prayers_${todayKey}`);
+      notifiedPrayersRef.current = savedPrayers ? JSON.parse(savedPrayers) : {};
+    } catch {}
+    try {
+      const savedAlarms = localStorage.getItem(`tuko_notified_alarms_${todayKey}`);
+      notifiedAlarmsRef.current = savedAlarms ? JSON.parse(savedAlarms) : {};
+    } catch {}
+
+    // Silently marks any custom alarm or todo that is currently in its trigger window
+    // while the app is hidden in the background so returning from outside NEVER re-triggers it.
     const markCurrentWindowAsHandledSilently = (now: Date) => {
       const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
       const currentDayOfWeek = now.getDay();
@@ -1271,20 +1280,10 @@ export default function App() {
         return;
       }
 
-      // 0b. If the user JUST entered/returned to the app from outside (or woke from sleep gap > 4.5s),
-      // mark any alarm/prayer that arrived while outside as already handled and ensure no stale modal or audio pops up!
-      const elapsedSinceLastTick = nowMs - lastVisibleTickRef.current;
-      if (isAppHiddenRef.current || elapsedSinceLastTick > 4500) {
+      if (isAppHiddenRef.current) {
         isAppHiddenRef.current = false;
         appVisibleSinceRef.current = nowMs;
-        lastVisibleTickRef.current = nowMs;
-        markCurrentWindowAsHandledSilently(now);
-        setActiveRingingAlarm(null);
-        setActiveAdhaanOverlayPrayer(null);
-        audioAlerts.stopAlarm();
-        return;
       }
-
       lastVisibleTickRef.current = nowMs;
 
       const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
@@ -1302,7 +1301,6 @@ export default function App() {
           const pH = Math.floor(schedMin / 60);
           const pM = schedMin % 60;
           const pTime24 = `${String(pH).padStart(2, '0')}:${String(pM).padStart(2, '0')}`;
-          const prayerStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pH, pM, 0, 0).getTime();
           const notificationKey = `${todayKey}_${p}_${schedMin}`;
           const preAlertMinutes = Number(settings.prePrayerAlertMinutes) || 0;
           const prePrayerKey = `${todayKey}_pre_${p}_${schedMin}`;
@@ -1329,15 +1327,14 @@ export default function App() {
             setTimeout(() => setSnoozeMessage(null), 6000);
           }
 
-          // Real-time prayer Adhan alert: only trigger inside the app if the user was inside the app when prayer time started
+          // Real-time prayer Adhan alert: trigger immediately when prayer time arrives!
           if (diffInMinutes >= 0 && diffInMinutes < 5.0 && !notifiedPrayersRef.current[notificationKey]) {
             notifiedPrayersRef.current[notificationKey] = true;
             try {
               localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(notifiedPrayersRef.current));
             } catch {}
 
-            const wasInsideWhenPrayerStarted = appVisibleSinceRef.current <= prayerStartMs + 3000;
-            if (!wasInsideWhenPrayerStarted || audioAlerts.isMinuteSilenced(pTime24)) {
+            if (audioAlerts.isMinuteSilenced(pTime24)) {
               return;
             }
 
@@ -1354,7 +1351,7 @@ export default function App() {
               `🕌 Aadaanka ${somaliPrayerName} Wuu Galay!\nWaa waqtigii salaadda ${somaliPrayerName}. Kac oo dhowr salaaddaada oo u diyaar garow cibaadada.`
             );
 
-            // 3. Open takeover overlay
+            // 3. Open takeover overlay (Post-Prayer Dhikr & Adhan Screen)
             setActiveAdhaanOverlayPrayer(p);
           }
         }
@@ -1374,7 +1371,6 @@ export default function App() {
         const alarmTotalMin = aH * 60 + aM;
         const diffAlarmMin = currentTotalMin - alarmTotalMin;
         const alarmTime24 = `${String(aH).padStart(2, '0')}:${String(aM).padStart(2, '0')}`;
-        const alarmMinuteStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), aH, aM, 0, 0).getTime();
 
         if (diffAlarmMin >= 0 && diffAlarmMin <= 2) {
           const alarmKey = `${todayKey}_alarm_${alarm.id}_${alarm.time}`;
@@ -1384,13 +1380,7 @@ export default function App() {
               localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
             } catch {}
 
-            // Only ring inside the app if the user was ALREADY inside the app when the alarm minute started
-            // (or created the alarm inside the app during this minute), AND the minute wasn't already silenced outside!
-            const createdDuringThisMinute = alarm.createdAt != null && alarm.createdAt >= alarmMinuteStartMs;
-            const wasInsideWhenAlarmStarted =
-              appVisibleSinceRef.current <= alarmMinuteStartMs + 3000 || createdDuringThisMinute;
-
-            if (diffAlarmMin > 0 || !wasInsideWhenAlarmStarted || audioAlerts.isMinuteSilenced(alarmTime24)) {
+            if (diffAlarmMin > 0 || audioAlerts.isMinuteSilenced(alarmTime24)) {
               return;
             }
 
@@ -1419,7 +1409,6 @@ export default function App() {
         const todoTotalMin = tH * 60 + tM;
         const diffTodoMin = currentTotalMin - todoTotalMin;
         const todoTime24 = `${String(tH).padStart(2, '0')}:${String(tM).padStart(2, '0')}`;
-        const todoMinuteStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), tH, tM, 0, 0).getTime();
 
         if (diffTodoMin >= 0 && diffTodoMin < 5) {
           const todoKey = `${todayKey}_todo_${todo.id}_${todo.dueTime}`;
@@ -1429,8 +1418,7 @@ export default function App() {
               localStorage.setItem(`tuko_notified_alarms_${todayKey}`, JSON.stringify(notifiedAlarmsRef.current));
             } catch {}
 
-            const wasInsideWhenTodoStarted = appVisibleSinceRef.current <= todoMinuteStartMs + 3000;
-            if (diffTodoMin > 0 || !wasInsideWhenTodoStarted || audioAlerts.isMinuteSilenced(todoTime24)) {
+            if (diffTodoMin > 0 || audioAlerts.isMinuteSilenced(todoTime24)) {
               return;
             }
 
@@ -1452,6 +1440,18 @@ export default function App() {
           }
         }
       });
+    };
+
+    const handleScheduleUpdatedEvent = () => {
+      try {
+        const savedPrayers = localStorage.getItem(`tuko_notified_prayers_${todayKey}`);
+        notifiedPrayersRef.current = savedPrayers ? JSON.parse(savedPrayers) : {};
+      } catch {}
+      try {
+        const savedAlarms = localStorage.getItem(`tuko_notified_alarms_${todayKey}`);
+        notifiedAlarmsRef.current = savedAlarms ? JSON.parse(savedAlarms) : {};
+      } catch {}
+      checkScheduleAndAlarms();
     };
 
     // Run initial check immediately
@@ -1485,12 +1485,12 @@ export default function App() {
         lastVisibleTickRef.current = now.getTime();
         markCurrentWindowAsHandledSilently(now);
         setActiveRingingAlarm(null);
-        setActiveAdhaanOverlayPrayer(null);
         audioAlerts.stopAlarm();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('tuko-schedule-updated', handleScheduleUpdatedEvent);
 
     return () => {
       clearInterval(interval);
@@ -1505,12 +1505,14 @@ export default function App() {
         } catch {}
       }
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('tuko-schedule-updated', handleScheduleUpdatedEvent);
     };
   }, [todayKey, settings, todos]);
 
   // Snooze handler for Adhan
   const handleSnooze = useCallback((minutes: number, prayer: PrayerName) => {
     setActiveAdhaanOverlayPrayer(null);
+    audioAlerts.silenceCurrentMinuteInNative();
     audioAlerts.stopAlarm();
     if (snoozeTimeoutRef.current) clearTimeout(snoozeTimeoutRef.current);
 
@@ -1530,12 +1532,14 @@ export default function App() {
   // Alarm Ring Dismiss & Snooze Handlers
   const handleDismissAlarm = useCallback(() => {
     setActiveRingingAlarm(null);
+    audioAlerts.silenceCurrentMinuteInNative();
     audioAlerts.stopAlarm();
   }, []);
 
   const handleSnoozeAlarm = useCallback((minutes = 5) => {
     const alarmToSnooze = activeRingingAlarm;
     setActiveRingingAlarm(null);
+    audioAlerts.silenceCurrentMinuteInNative();
     audioAlerts.stopAlarm();
     if (alarmSnoozeTimeoutRef.current) clearTimeout(alarmSnoozeTimeoutRef.current);
 
@@ -1595,6 +1599,8 @@ export default function App() {
   // Mark Prayed handler (Batoonka "Waan Tukaday")
   const handleMarkPrayed = useCallback(
     (prayer: PrayerName, status: SalaahStatus) => {
+      audioAlerts.silenceCurrentMinuteInNative();
+      audioAlerts.stopAlarm();
       handleUpdatePrayer(prayer, { status });
       logEvent('prayer_marked', { prayer, status });
       setActiveAdhaanOverlayPrayer(null);
@@ -2437,12 +2443,14 @@ export default function App() {
           isSisterMode={settings.gender === 'female'}
           adhanVoice={settings.prayerVoices?.[activeAdhaanOverlayPrayer] || settings.adhanVoice}
           onClose={() => {
+            audioAlerts.silenceCurrentMinuteInNative();
             audioAlerts.stopAlarm();
             setActiveAdhaanOverlayPrayer(null);
           }}
           onMarkPrayed={handleMarkPrayed}
           onSnooze={handleSnooze}
           onComplete={() => {
+            audioAlerts.silenceCurrentMinuteInNative();
             audioAlerts.stopAlarm();
             handleMarkPrayed(activeAdhaanOverlayPrayer, settings.gender === 'female' ? 'early_home' : 'mosque');
           }}

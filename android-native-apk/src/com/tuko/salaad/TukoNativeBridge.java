@@ -49,9 +49,8 @@ public class TukoNativeBridge {
             String targetTime = (time24 != null && !time24.trim().isEmpty()) ? time24.trim() : currentHHmm;
             SharedPreferences prefs = context.getSharedPreferences(AdhanAlarmReceiver.PREFS_NAME, Context.MODE_PRIVATE);
 
-            long stoppedUntil = prefs.getLong("stopped_until_ms", 0L);
             String stoppedMinKey = prefs.getString("stopped_minute_key", "");
-            if (now < stoppedUntil || (today + "_" + targetTime).equals(stoppedMinKey)) {
+            if ((today + "_" + targetTime).equals(stoppedMinKey)) {
                 return true;
             }
 
@@ -90,14 +89,19 @@ public class TukoNativeBridge {
         try {
             SharedPreferences prefs = context.getSharedPreferences(AdhanAlarmReceiver.PREFS_NAME, Context.MODE_PRIVATE);
             String previous = prefs.getString("schedule_json", "");
-            prefs.edit().putString("schedule_json", jsonSchedule).apply();
+            boolean scheduleChanged = !jsonSchedule.equals(previous);
+            SharedPreferences.Editor editor = prefs.edit().putString("schedule_json", jsonSchedule);
+            if (scheduleChanged) {
+                editor.remove("stopped_minute_key").remove("stopped_until_ms");
+            }
+            editor.apply();
 
             AdhanForegroundService.startServiceSafely(context);
 
             // Schedule with AlarmManager whenever the schedule changes or at least once per minute
             long lastScheduledAt = prefs.getLong("last_alarm_manager_sync", 0L);
             long now = System.currentTimeMillis();
-            if (!jsonSchedule.equals(previous) || (now - lastScheduledAt) > 60_000L) {
+            if (scheduleChanged || (now - lastScheduledAt) > 60_000L) {
                 prefs.edit().putLong("last_alarm_manager_sync", now).apply();
                 scheduleAllWithAlarmManager(context, jsonSchedule);
             }

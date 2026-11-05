@@ -396,9 +396,8 @@ public class MainActivity extends Activity {
         if (webView != null) {
             webView.resumeTimers();
             try {
-                // Mark the current minute as silenced in WebView localStorage when entering the app
-                // so any alarm/adhan that rang outside the app never re-triggers inside the app
-                String silenceJs = "(function(){try{var d=new Date();var hhmm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);localStorage.setItem('tuko_silenced_hhmm',hhmm);localStorage.setItem('tuko_silenced_ts',String(Date.now()));}catch(e){}})();";
+                // Only mark the current minute as silenced in WebView localStorage if Native Android already fired or silenced this minute outside the app!
+                String silenceJs = "(function(){try{if(window.TukoNative&&typeof window.TukoNative.isMinuteSilencedOrFired==='function'&&window.TukoNative.isMinuteSilencedOrFired('')){var d=new Date();var hhmm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);localStorage.setItem('tuko_silenced_hhmm',hhmm);localStorage.setItem('tuko_silenced_ts',String(Date.now()));}}catch(e){}})();";
                 if (Build.VERSION.SDK_INT >= 19) {
                     webView.evaluateJavascript(silenceJs, null);
                 } else {

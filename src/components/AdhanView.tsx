@@ -177,6 +177,15 @@ function parse24To12Parts(time24: string): { hour12: number; minute: number; amp
   return { hour12, minute, ampm };
 }
 
+// Convert decimal hour (e.g. 18.8833) to 24h "HH:MM"
+function decimalTo24Time(dec: number): string {
+  if (!Number.isFinite(dec)) return '05:00';
+  const totalMinutes = Math.round(dec * 60);
+  const h = ((Math.floor(totalMinutes / 60) % 24) + 24) % 24;
+  const m = ((totalMinutes % 60) + 60) % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 // Deterministic live clock display
 function formatLiveDigitalClock(date: Date): { hms: string; ampm: string } {
   let h = date.getHours();
@@ -323,9 +332,18 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
     setAlarms(nextAlarms);
     audioAlerts.unlockAudio();
     audioAlerts.requestWakeLock();
+    audioAlerts.clearMinuteSilence();
+    try {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      localStorage.removeItem(`tuko_notified_alarms_${todayKey}`);
+    } catch {}
     if (onUpdateSettings) {
       onUpdateSettings({ alarms: nextAlarms });
     }
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('tuko-schedule-updated'));
+    }, 50);
   };
 
   // Start quick countdown timer
@@ -542,19 +560,78 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
     field: 'adhan' | 'iqama',
     val: string
   ) => {
-    const currentSchedule = settings.customSchedule || DEFAULT_USER_PRAYER_SCHEDULE;
+    audioAlerts.unlockAudio();
+    audioAlerts.requestWakeLock();
+    audioAlerts.clearMinuteSilence();
+
+    const baseSchedule: CustomPrayerSchedule =
+      settings.useCustomSchedule && settings.customSchedule
+        ? settings.customSchedule
+        : {
+            Fajr: {
+              adhan: decimalTo24Time(prayerTimes.Fajr),
+              iqama: settings.customSchedule?.Fajr?.iqama || DEFAULT_USER_PRAYER_SCHEDULE.Fajr.iqama,
+            },
+            Sunrise: {
+              adhan: decimalTo24Time(prayerTimes.Sunrise),
+              iqama: settings.customSchedule?.Sunrise?.iqama || DEFAULT_USER_PRAYER_SCHEDULE.Sunrise.iqama,
+            },
+            Duhur: {
+              adhan: decimalTo24Time(prayerTimes.Duhur),
+              iqama: settings.customSchedule?.Duhur?.iqama || DEFAULT_USER_PRAYER_SCHEDULE.Duhur.iqama,
+            },
+            Casar: {
+              adhan: decimalTo24Time(prayerTimes.Casar),
+              iqama: settings.customSchedule?.Casar?.iqama || DEFAULT_USER_PRAYER_SCHEDULE.Casar.iqama,
+            },
+            Maqrib: {
+              adhan: decimalTo24Time(prayerTimes.Maqrib),
+              iqama: settings.customSchedule?.Maqrib?.iqama || DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.iqama,
+            },
+            Cishe: {
+              adhan: decimalTo24Time(prayerTimes.Cishe),
+              iqama: settings.customSchedule?.Cishe?.iqama || DEFAULT_USER_PRAYER_SCHEDULE.Cishe.iqama,
+            },
+          };
+
     const updated: CustomPrayerSchedule = {
-      ...currentSchedule,
+      ...baseSchedule,
       [prayer]: {
-        ...currentSchedule[prayer],
+        ...baseSchedule[prayer],
         [field]: val,
       },
     };
+
+    // Clear notified state for this prayer so the newly set time ALWAYS triggers AdhkaarOverlay!
+    try {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const raw = localStorage.getItem(`tuko_notified_prayers_${todayKey}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        Object.keys(parsed).forEach((k) => {
+          if (k.includes(`_${prayer}_`)) {
+            delete parsed[k];
+          }
+        });
+        localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(parsed));
+      }
+    } catch {}
+
     if (onUpdateSettings) {
-      onUpdateSettings({ customSchedule: updated, useCustomSchedule: true });
+      onUpdateSettings({ customSchedule: updated, useCustomSchedule: true, adhanSound: true });
     }
-    setSaveSuccessMsg('Waqtiga waa la keydiyay!');
-    setTimeout(() => setSaveSuccessMsg(null), 2500);
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('tuko-schedule-updated'));
+    }, 50);
+
+    const { time12, ampm } = format24To12Display(val);
+    const prayerLabel = PRAYER_SOMALI_LABELS[prayer as PrayerName] || prayer;
+    setSaveSuccessMsg(
+      `✓ Waqtiga ${field === 'adhan' ? 'Aadaanka' : 'Aqinka'} ${prayerLabel} waxaa loo xiray ${time12} ${ampm} — wuu soo dhici doonaa waqtigaas!`
+    );
+    setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 
   const handleResetSchedule = () => {
@@ -1130,6 +1207,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
               const chosenSheikh = SHEIKH_VOICES.find((v) => v.id === prayerVoiceId) || SHEIKH_VOICES[0];
               const isVoicePlaying = playingVoiceId === prayerVoiceId;
               const prayerTimeFormatted = formatTime12(prayerTimes[p.key]);
+              const prayerTime24 = decimalTo24Time(prayerTimes[p.key]);
 
               return (
                 <div
@@ -1141,7 +1219,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                   }`}
                 >
                   <div className="space-y-3">
-                    {/* Header: Prayer Name & Time */}
+                    {/* Header: Prayer Name & Editable Time */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
                         <span className="text-2xl p-2 rounded-2xl bg-black/40 border border-teal-500/20">
@@ -1151,20 +1229,44 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                           <h4 className="font-black text-base text-white tracking-tight">
                             {p.label}
                           </h4>
-                          <span className="text-[11px] font-mono text-teal-300 font-semibold">
-                            Waqtiga: {prayerTimeFormatted}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveScheduleSlot({
+                                prayerKey: p.key as keyof CustomPrayerSchedule,
+                                field: 'adhan',
+                                currentTime: prayerTime24,
+                                label: `${p.label} - Aadaan`,
+                              })
+                            }
+                            className="mt-0.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-500/15 hover:bg-teal-500/30 border border-teal-400/40 text-[11px] font-mono text-teal-200 font-black transition active:scale-95 cursor-pointer"
+                            title="Riix si aad u beddesho waqtiga Aadaanka salaaddan"
+                          >
+                            <Clock className="w-3 h-3 text-amber-300 shrink-0" />
+                            <span>{prayerTimeFormatted}</span>
+                            <span className="text-[10px] text-amber-300 underline">Beddel</span>
+                          </button>
                         </div>
                       </div>
 
                       {/* Equalizer Waveform indicator if playing */}
-                      {isVoicePlaying && (
+                      {isVoicePlaying ? (
                         <div className="flex items-center gap-1 bg-cyan-500/20 px-2.5 py-1 rounded-full border border-cyan-400/40 text-cyan-300 text-[10px] font-black">
                           <span className="w-1.5 h-3 bg-cyan-400 rounded-full animate-bounce" />
                           <span className="w-1.5 h-4 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.15s]" />
                           <span className="w-1.5 h-2 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.3s]" />
                           <span className="ml-1">Wuu socdaa...</span>
                         </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onTriggerAdhaanOverlay(p.key)}
+                          className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-amber-200 text-[10px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer shrink-0"
+                          title="Fur shaashadda weyn ee Aadaanka & Adhkaarta salaaddan"
+                        >
+                          <Bell className="w-3 h-3 fill-current" />
+                          <span>Shaashadda</span>
+                        </button>
                       )}
                     </div>
 
@@ -1357,6 +1459,10 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                 adhan: '00:00',
                 iqama: '00:00',
               };
+              const activeAdhan24 =
+                settings.useCustomSchedule && settings.customSchedule
+                  ? slot.adhan
+                  : decimalTo24Time(prayerTimes[item.key as PrayerName]);
 
               return (
                 <div
@@ -1369,7 +1475,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                       <span className="font-extrabold text-sm text-white">{item.label}</span>
                     </div>
                     <span className="text-[10px] text-teal-300 font-mono">
-                      {format24To12Display(slot.adhan).time12} {format24To12Display(slot.adhan).ampm}
+                      {format24To12Display(activeAdhan24).time12} {format24To12Display(activeAdhan24).ampm}
                     </span>
                   </div>
 
@@ -1384,7 +1490,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                           setActiveScheduleSlot({
                             prayerKey: item.key,
                             field: 'adhan',
-                            currentTime: slot.adhan,
+                            currentTime: activeAdhan24,
                             label: `${item.label} - Aadaan`,
                           })
                         }
@@ -1392,7 +1498,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                         title="Dooro saacadda Aadaanka"
                       >
                         <span className="text-teal-300 font-bold">
-                          {format24To12Display(slot.adhan).time12} {format24To12Display(slot.adhan).ampm}
+                          {format24To12Display(activeAdhan24).time12} {format24To12Display(activeAdhan24).ampm}
                         </span>
                         <Clock className="w-3.5 h-3.5 text-teal-400 shrink-0" />
                       </button>

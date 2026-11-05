@@ -113,8 +113,6 @@ public class AdhanForegroundService extends Service {
 
         SharedPreferences prefs = getSharedPreferences(AdhanAlarmReceiver.PREFS_NAME, Context.MODE_PRIVATE);
         long now = System.currentTimeMillis();
-        long stoppedUntil = prefs.getLong("stopped_until_ms", 0L);
-        if (now < stoppedUntil) return;
 
         String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(now));
         String currentHHmm = new SimpleDateFormat("HH:mm", Locale.US).format(new Date(now));

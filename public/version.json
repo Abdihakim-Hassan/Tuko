@@ -1,13 +1,13 @@
 {
-  "version": "2.9.4",
-  "build": 73,
+  "version": "2.9.5",
+  "build": 74,
   "releaseDate": "2026-11-05",
   "minSupportedVersion": "2.0.0",
-  "title": "Tuko Salaad & Adhkaar v2.9.4",
+  "title": "Tuko Salaad & Adhkaar v2.9.5",
   "changelog": [
+    "Shaashadda Aadaanka & Adhkaarta (Post-Prayer Dhikr): Aadaan kasta wuxuu ku soo dhacayaa isla daqiiqadda aad u xirtay isagoo soo saaraya shaashadda weyn ee Adhkaarta & 'Waan tukaday'",
+    "Toos uga beddel waqtiga Aadaanka kaarka salaad kasta (Subax, Duhur, Casar, Magrib, Cisha) ama Jadwalka Salaadda",
     "Ogeysiiska Joogtada ah ('Heeganka Aadaanka & Alaarmka 24/7') waa la xiray si uusan mar walba shaashadda ugu soo dhicin",
-    "Alaarmka & Aadaanka (Banaanka & Gudaha): Haddii aad alaarmka ka damiso banaanka app-ka ama gudaha app-ka, dib dambe uma soo kacayo marka aad app-ka soo gasho",
-    "Qur'aanka Offline (100% Cusub): Codadka Suuradaha waxaa lagu keydiyaa Blob (200 OK) si ay uga shaqeeyaan 100% bilaa internet",
-    "Hubi Update-ka: Nadiifinta Cache-ka si update-ku isla markiiba u shaqeeyo marka la riixo 'Cusboonaysii Hadda'"
+    "Alaarmka & Aadaanka (Banaanka & Gudaha): Haddii aad alaarmka ka damiso banaanka app-ka ama gudaha app-ka, dib dambe uma soo kacayo marka aad app-ka soo gasho"
   ]
 }

@@ -33,7 +33,7 @@ public class AdhanAlarmReceiver extends BroadcastReceiver {
             String currentHHmm = new SimpleDateFormat("HH:mm", Locale.US).format(new Date(now));
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             prefs.edit()
-                    .putLong("stopped_until_ms", now + 90_000L)
+                    .remove("stopped_until_ms")
                     .putString("stopped_minute_key", today + "_" + currentHHmm)
                     .apply();
 
@@ -106,10 +106,9 @@ public class AdhanAlarmReceiver extends BroadcastReceiver {
 
             SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
-            // 1. If user explicitly pressed Stop (Jooji) recently or for this minute, NEVER re-trigger!
-            long stoppedUntil = prefs.getLong("stopped_until_ms", 0L);
+            // 1. If user explicitly pressed Stop (Jooji) for this exact minute, NEVER re-trigger!
             String stoppedMinKey = prefs.getString("stopped_minute_key", "");
-            if (now < stoppedUntil || (today + "_" + effectiveTime).equals(stoppedMinKey) || (today + "_" + currentHHmm).equals(stoppedMinKey)) {
+            if ((today + "_" + effectiveTime).equals(stoppedMinKey) || (today + "_" + currentHHmm).equals(stoppedMinKey)) {
                 Log.d(TAG, "Suppressed re-trigger because user already pressed Stop for " + effectiveTime);
                 return;
             }

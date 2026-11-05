@@ -1,7 +1,7 @@
 // App Update & Version Checker Service for Tuko
 
-export const CURRENT_APP_VERSION = '2.9.4';
-export const CURRENT_BUILD_NUMBER = 73;
+export const CURRENT_APP_VERSION = '2.9.5';
+export const CURRENT_BUILD_NUMBER = 74;
 
 export interface RemoteVersionInfo {
   version: string;

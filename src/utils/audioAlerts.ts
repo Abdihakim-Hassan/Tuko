@@ -42,9 +42,16 @@ class AudioManager {
       const hhmm = AudioManager.getCurrentHHmm();
       localStorage.setItem('tuko_silenced_hhmm', hhmm);
       localStorage.setItem('tuko_silenced_ts', String(Date.now()));
-      if ((window as any).TukoNative?.schedulePrayerTimes) {
-        (window as any).TukoNative.schedulePrayerTimes('[]');
-      }
+    } catch {}
+  }
+
+  public clearMinuteSilence(): void {
+    this.userStoppedUntilMs = 0;
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem('tuko_silenced_hhmm');
+      localStorage.removeItem('tuko_silenced_ts');
+      (window as any).__tukoLastScheduleJson = '';
     } catch {}
   }
 
@@ -52,12 +59,9 @@ class AudioManager {
     if (typeof window === 'undefined') return false;
     try {
       const targetHHmm = time24 && time24.trim() ? time24.trim() : AudioManager.getCurrentHHmm();
-      if (Date.now() < this.userStoppedUntilMs && targetHHmm === AudioManager.getCurrentHHmm()) {
-        return true;
-      }
       const silencedHHmm = localStorage.getItem('tuko_silenced_hhmm') || '';
       const silencedTs = Number(localStorage.getItem('tuko_silenced_ts') || '0');
-      if (silencedHHmm === targetHHmm && Date.now() - silencedTs < 120_000) {
+      if (silencedHHmm === targetHHmm && Date.now() - silencedTs < 60_000) {
         return true;
       }
       if (typeof (window as any).TukoNative?.isMinuteSilencedOrFired === 'function') {
@@ -459,7 +463,6 @@ class AudioManager {
     // 0. If running inside Android Native APK, trigger native hardware player ONLY (never play HTML5 audio simultaneously!)
     if (typeof window !== 'undefined' && (window as any).TukoNative?.playAdhanNow) {
       try {
-        this.silenceCurrentMinuteInNative();
         (window as any).TukoNative.playAdhanNow(isFajr ? 'Fajr' : 'Adhan', voice);
         this.isCurrentlyPlaying = true;
         this.isStartingPlay = false;
@@ -824,7 +827,6 @@ class AudioManager {
     onEnded?: () => void
   ): void {
     this.clearTimersOnly();
-    this.silenceCurrentMinuteInNative();
     this.unlockAudio();
     this.requestWakeLock();
 
@@ -906,8 +908,7 @@ class AudioManager {
 
   // Stops any playing Adhan immediately and silences the current minute in Native ForegroundService
   stopAdhan(): void {
-    this.userStoppedUntilMs = Date.now() + 65_000;
-    this.silenceCurrentMinuteInNative();
+    this.userStoppedUntilMs = 0;
 
     if (typeof window !== 'undefined' && (window as any).TukoNative?.stopAdhan) {
       try {
