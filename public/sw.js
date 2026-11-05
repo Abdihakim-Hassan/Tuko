@@ -1,5 +1,5 @@
-// Tuko Service Worker v77 — 100% Full Offline Mode Across All 12 Sections & All 114 Surahs
-const CACHE_NAME = 'tuko-pwa-v77';
+// Tuko Service Worker v78 — 100% Full Offline Mode Across All 12 Sections & All 114 Surahs
+const CACHE_NAME = 'tuko-pwa-v78';
 const QURAN_DATA_CACHE = 'tuko-quran-data-v1';
 const QURAN_AUDIO_CACHE = 'tuko-audio-cache-v2';
 
@@ -206,7 +206,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Same-origin assets (JS, CSS, Icons, Adhan Audios): Cache-First with background update
+  // 2b. Local Adhan & Alarm MP3s (/audio/*.mp3): Network-first when online (prevents Range/206 or SPA-fallback HTML cache issues), Cache fallback when offline
+  if (url.origin === self.location.origin && url.pathname.startsWith('/audio/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          const ct = (networkResponse && networkResponse.headers.get('content-type')) || '';
+          if (networkResponse && networkResponse.status === 200 && ct.includes('audio')) {
+            const clone = networkResponse.clone();
+            caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(url.pathname, clone))
+              .catch(() => {});
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          return (
+            (await caches.match(url.pathname)) ||
+            (await caches.match(event.request, { ignoreSearch: true })) ||
+            new Response('', { status: 503, statusText: 'Offline' })
+          );
+        })
+    );
+    return;
+  }
+
+  // 3. Same-origin assets (JS, CSS, Icons): Cache-First with background update
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {

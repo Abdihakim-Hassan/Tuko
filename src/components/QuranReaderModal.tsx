@@ -124,7 +124,7 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
   }, []);
 
   const handleToggleReciterPreview = useCallback(
-    async (reciterId: string, e: React.MouseEvent) => {
+    (reciterId: string, e: React.MouseEvent) => {
       e.stopPropagation();
       if (previewingReciterId === reciterId) {
         stopReciterPreview();
@@ -137,16 +137,18 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
       }
       setPreviewingReciterId(reciterId);
       try {
-        const sampleUrl = getAyahAudioUrl(reciterId, selectedSurahNumber || 1, (currentAyahIndex || 0) + 1);
-        const playableSrc = await resolvePlayableAudioSrc(sampleUrl);
+        // Play Ayah 2 (Alhamdulillahi Rabbil Aalamiin) of Surah 1 or current Surah synchronously on user gesture
+        const targetSurah = selectedSurahNumber || 1;
+        const targetAyah = targetSurah === 1 ? 2 : (currentAyahIndex || 0) + 1;
+        const sampleUrl = getAyahAudioUrl(reciterId, targetSurah, targetAyah);
         if (!reciterPreviewAudioRef.current) {
           reciterPreviewAudioRef.current = new Audio();
         }
         const previewEl = reciterPreviewAudioRef.current;
-        previewEl.src = playableSrc;
+        previewEl.src = sampleUrl;
         previewEl.onended = () => setPreviewingReciterId(null);
         previewEl.onerror = () => setPreviewingReciterId(null);
-        await previewEl.play();
+        previewEl.play().catch(() => setPreviewingReciterId(null));
       } catch {
         setPreviewingReciterId(null);
       }
@@ -223,12 +225,13 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
 
   // Play audio for specific ayah index (resolves local blob: URL from CacheStorage for 100% offline playback!)
   const playAyah = useCallback(
-    async (ayahIndex: number) => {
+    async (ayahIndex: number, overrideReciterId?: string) => {
       if (!surahData || !surahData.ayahs[ayahIndex]) return;
 
+      const effectiveReciterId = overrideReciterId || selectedReciterId;
       const targetAyah = surahData.ayahs[ayahIndex];
       const audioUrl = getAyahAudioUrl(
-        selectedReciterId,
+        effectiveReciterId,
         surahData.number,
         targetAyah.numberInSurah
       );
@@ -861,7 +864,9 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
                             setSelectedReciterId(reciter.id);
                             setShowReciterDropdown(false);
                             if (isPlaying) {
-                              playAyah(currentAyahIndex);
+                              playAyah(currentAyahIndex, reciter.id);
+                            } else if (audioRef.current) {
+                              audioRef.current.src = '';
                             }
                           }}
                           className="flex-1 min-w-0 text-left cursor-pointer"
@@ -913,7 +918,9 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
                               setSelectedReciterId(reciter.id);
                               setShowReciterDropdown(false);
                               if (isPlaying) {
-                                playAyah(currentAyahIndex);
+                                playAyah(currentAyahIndex, reciter.id);
+                              } else if (audioRef.current) {
+                                audioRef.current.src = '';
                               }
                             }}
                             className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black transition active:scale-95 cursor-pointer ${

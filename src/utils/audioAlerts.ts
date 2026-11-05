@@ -242,7 +242,7 @@ class AudioManager {
   }
 
   getAudioSrcForVoice(voice: AdhanVoice = 'makkah', isFajr = false): string {
-    const vTag = '?v=57';
+    const vTag = '?v=78';
     if (isFajr || voice === 'fajr') return `/audio/adhan_fajr.mp3${vTag}`;
     switch (voice) {
       case 'makkah':
@@ -467,13 +467,25 @@ class AudioManager {
   async playAdhan(
     isFajr = false,
     onEnded?: () => void,
-    voice: AdhanVoice = 'makkah'
+    voice: AdhanVoice = 'makkah',
+    forceWebAudio = false
   ): Promise<boolean> {
     this.requestWakeLock();
     this.currentVoice = voice;
 
-    // 0. If running inside Android Native APK, trigger native hardware player ONLY (never play HTML5 audio simultaneously!)
-    if (typeof window !== 'undefined' && (window as any).TukoNative?.playAdhanNow) {
+    const isCloudUpdatedVoice =
+      voice === 'alijaber' ||
+      voice === 'umar' ||
+      voice === 'ayyub' ||
+      voice === 'badralturki';
+
+    // 0. If running inside Android Native APK, trigger native hardware player ONLY when not forcing web preview
+    if (
+      !forceWebAudio &&
+      !isCloudUpdatedVoice &&
+      typeof window !== 'undefined' &&
+      (window as any).TukoNative?.playAdhanNow
+    ) {
       try {
         (window as any).TukoNative.playAdhanNow(isFajr ? 'Fajr' : 'Adhan', voice);
         this.isCurrentlyPlaying = true;
@@ -482,6 +494,10 @@ class AudioManager {
       } catch (err) {
         console.warn('Native Adhan trigger notice:', err);
       }
+    } else if (typeof window !== 'undefined' && (window as any).TukoNative?.stopAdhan) {
+      try {
+        (window as any).TukoNative.stopAdhan();
+      } catch {}
     }
 
     const audioSrc = this.getAudioSrcForVoice(voice, isFajr);

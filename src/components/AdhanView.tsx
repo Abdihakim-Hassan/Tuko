@@ -406,7 +406,8 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
         () => {
           setPlayingVoiceId(null);
         },
-        voiceId
+        voiceId,
+        true
       );
     }
   };

@@ -109,8 +109,11 @@ export interface SurahDetails {
  * Returns the direct MP3 audio stream for a specific ayah and reciter
  */
 export function getAyahAudioUrl(reciterId: string, surahNumber: number, ayahNumber: number): string {
-  const reciter = QURAN_RECITERS.find((r) => r.id === reciterId) || QURAN_RECITERS[0];
   const surahStr = String(surahNumber).padStart(3, '0');
+  if (reciterId === 'badralturki') {
+    return `https://server10.mp3quran.net/badr/${surahStr}.mp3`;
+  }
+  const reciter = QURAN_RECITERS.find((r) => r.id === reciterId) || QURAN_RECITERS[0];
   const ayahStr = String(ayahNumber).padStart(3, '0');
   return `https://everyayah.com/data/${reciter.subfolder}/${surahStr}${ayahStr}.mp3`;
 }
