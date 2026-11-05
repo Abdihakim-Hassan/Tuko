@@ -130,6 +130,10 @@ public class AdhanAudioPlayer {
         if ("minshawi".equals(v)) return "adhan_minshawi.mp3";
         if ("qatami".equals(v)) return "adhan_qatami.mp3";
         if ("zahrani".equals(v)) return "adhan_zahrani.mp3";
+        if ("alijaber".equals(v)) return "adhan_alijaber.mp3";
+        if ("umar".equals(v)) return "adhan_umar.mp3";
+        if ("ayyub".equals(v)) return "adhan_ayyub.mp3";
+        if ("badralturki".equals(v)) return "adhan_badralturki.mp3";
         return "adhan_makkah.mp3";
     }
 

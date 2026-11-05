@@ -47,6 +47,38 @@ interface SheikhOption {
 
 const SHEIKHS_LIST: SheikhOption[] = [
   {
+    id: 'alijaber',
+    name: 'Sheikh Cali Jaabir (Ali Jaber)',
+    location: 'Masjid al-Haram, Makkah',
+    badge: 'Ali Jaber',
+    icon: '🕋',
+    description: 'Imaamkii caanka ahaa ee Xaramka Makkah — cod aad u macaan oo qalbiga ruxaya.',
+  },
+  {
+    id: 'ayyub',
+    name: 'Sheikh Maxamed Ayuub (Muhammad Ayyub)',
+    location: 'Masjid an-Nabawi, Madinah',
+    badge: 'M. Ayyub',
+    icon: '🕌',
+    description: 'Imaamkii caanka ahaa ee Masjidka Nabiga ﷺ — cod xasilloon oo qalbiga taabanaya.',
+  },
+  {
+    id: 'badralturki',
+    name: 'Sheikh Badr Al-Turki (Badr Al-Turkey)',
+    location: 'Masjid al-Haram, Makkah',
+    badge: 'Badr Al-Turki',
+    icon: '🕋',
+    description: 'Imaamka Masjidka Xaramka ee Makkah — cod qiiro iyo khushuuc sare leh.',
+  },
+  {
+    id: 'umar',
+    name: 'Umar Sildinskiy (Cumar Al-Sildinski)',
+    location: 'Caalamka Islaamka',
+    badge: 'Umar Sildinskiy',
+    icon: '🎙️',
+    description: 'Cod qiiro, deganaan iyo khushuuc sare leh oo aad loo jecel yahay.',
+  },
+  {
     id: 'makkah',
     name: 'Sheikh Cali Axmed Mulla (Ali Mulla)',
     location: 'Masjid al-Haram, Makkah',

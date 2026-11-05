@@ -26,6 +26,10 @@ export type AdhanVoice =
   | 'zahrani'
   | 'qatami'
   | 'minshawi'
+  | 'alijaber'
+  | 'umar'
+  | 'ayyub'
+  | 'badralturki'
   | 'fajr';
 
 export type UserRole = 'admin' | 'musallii' | 'mentor';

@@ -259,6 +259,14 @@ class AudioManager {
         return `/audio/adhan_qatami.mp3${vTag}`;
       case 'minshawi':
         return `/audio/adhan_minshawi.mp3${vTag}`;
+      case 'alijaber':
+        return `/audio/adhan_alijaber.mp3${vTag}`;
+      case 'umar':
+        return `/audio/adhan_umar.mp3${vTag}`;
+      case 'ayyub':
+        return `/audio/adhan_ayyub.mp3${vTag}`;
+      case 'badralturki':
+        return `/audio/adhan_badralturki.mp3${vTag}`;
       default:
         return `/audio/adhan_makkah.mp3${vTag}`;
     }
@@ -276,6 +284,10 @@ class AudioManager {
       'zahrani',
       'qatami',
       'minshawi',
+      'alijaber',
+      'umar',
+      'ayyub',
+      'badralturki',
       'fajr',
     ];
 

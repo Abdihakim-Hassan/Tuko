@@ -109,7 +109,50 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
   // References
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const tafsirAudioRef = useRef<HTMLAudioElement | null>(null);
+  const reciterPreviewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [previewingReciterId, setPreviewingReciterId] = useState<string | null>(null);
   const ayahRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  const stopReciterPreview = useCallback(() => {
+    if (reciterPreviewAudioRef.current) {
+      try {
+        reciterPreviewAudioRef.current.pause();
+        reciterPreviewAudioRef.current.src = '';
+      } catch {}
+    }
+    setPreviewingReciterId(null);
+  }, []);
+
+  const handleToggleReciterPreview = useCallback(
+    async (reciterId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (previewingReciterId === reciterId) {
+        stopReciterPreview();
+        return;
+      }
+      stopReciterPreview();
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+      setPreviewingReciterId(reciterId);
+      try {
+        const sampleUrl = getAyahAudioUrl(reciterId, selectedSurahNumber || 1, (currentAyahIndex || 0) + 1);
+        const playableSrc = await resolvePlayableAudioSrc(sampleUrl);
+        if (!reciterPreviewAudioRef.current) {
+          reciterPreviewAudioRef.current = new Audio();
+        }
+        const previewEl = reciterPreviewAudioRef.current;
+        previewEl.src = playableSrc;
+        previewEl.onended = () => setPreviewingReciterId(null);
+        previewEl.onerror = () => setPreviewingReciterId(null);
+        await previewEl.play();
+      } catch {
+        setPreviewingReciterId(null);
+      }
+    },
+    [previewingReciterId, selectedSurahNumber, currentAyahIndex, stopReciterPreview]
+  );
 
   // Sync initialSurahNumber when prop changes
   useEffect(() => {
@@ -776,42 +819,115 @@ export const QuranReaderModal: React.FC<QuranReaderModalProps> = ({
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
 
-            {/* Reciter Dropdown Popover */}
+            {/* Reciter Dropdown Popover with Live Play/Stop Voice Preview */}
             {showReciterDropdown && (
-              <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Dooro Codka Quraanka (Mishary, Maher, Minshawi...)
-                </div>
-                <div className="space-y-1">
-                  {QURAN_RECITERS.map((reciter) => (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 max-h-[75vh] overflow-y-auto bg-slate-900 border border-teal-500/40 rounded-2xl shadow-2xl p-2.5 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-800 mb-1.5">
+                  <span className="text-[11px] font-black text-teal-300 uppercase tracking-wider">
+                    Dooro &amp; Dhagayso Codka Shiikha ({QURAN_RECITERS.length} Shiikh)
+                  </span>
+                  {previewingReciterId && (
                     <button
-                      key={reciter.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedReciterId(reciter.id);
-                        setShowReciterDropdown(false);
-                        // If currently playing, restart with new reciter
-                        if (isPlaying) {
-                          playAyah(currentAyahIndex);
-                        }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        stopReciterPreview();
                       }}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-colors ${
-                        reciter.id === selectedReciterId
-                          ? 'bg-emerald-600/30 border border-emerald-500/50 text-white'
-                          : 'text-slate-200 hover:bg-slate-800/80'
-                      }`}
+                      className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-rose-500 text-white cursor-pointer"
                     >
-                      <div>
-                        <p className="font-semibold text-xs sm:text-sm text-slate-100">
-                          {reciter.name}
-                        </p>
-                        <p className="text-[11px] text-slate-400">{reciter.description}</p>
-                      </div>
-                      <span className="font-arabic text-xs text-amber-300">
-                        {reciter.arabicName.split(' ')[0]}
-                      </span>
+                      ⏹ Dami Codka
                     </button>
-                  ))}
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {QURAN_RECITERS.map((reciter) => {
+                    const isSelected = reciter.id === selectedReciterId;
+                    const isPreviewingThis = previewingReciterId === reciter.id;
+                    return (
+                      <div
+                        key={reciter.id}
+                        className={`w-full flex items-center justify-between gap-2 p-2.5 rounded-xl transition-all border ${
+                          isPreviewingThis
+                            ? 'bg-cyan-950/70 border-cyan-400 ring-1 ring-cyan-400/50 text-white'
+                            : isSelected
+                            ? 'bg-emerald-600/25 border-emerald-500/50 text-white'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-200 hover:bg-slate-800/80'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            stopReciterPreview();
+                            setSelectedReciterId(reciter.id);
+                            setShowReciterDropdown(false);
+                            if (isPlaying) {
+                              playAyah(currentAyahIndex);
+                            }
+                          }}
+                          className="flex-1 min-w-0 text-left cursor-pointer"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-bold text-xs sm:text-sm text-white truncate">
+                              {reciter.name}
+                            </p>
+                            {isSelected && (
+                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 shrink-0">
+                                ✓ Xulan
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                            {reciter.description}
+                          </p>
+                        </button>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Play / Stop Preview Button right inside the list */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleReciterPreview(reciter.id, e)}
+                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 transition active:scale-95 cursor-pointer ${
+                              isPreviewingThis
+                                ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-md'
+                                : 'bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/40 text-teal-200'
+                            }`}
+                            title={isPreviewingThis ? 'Dami codka shiikhan' : 'Daar oo tijaabi codka shiikhan'}
+                          >
+                            {isPreviewingThis ? (
+                              <>
+                                <Pause className="w-3 h-3 fill-current" />
+                                <span>Dami</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3 h-3 fill-current" />
+                                <span>Daar</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              stopReciterPreview();
+                              setSelectedReciterId(reciter.id);
+                              setShowReciterDropdown(false);
+                              if (isPlaying) {
+                                playAyah(currentAyahIndex);
+                              }
+                            }}
+                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black transition active:scale-95 cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500 text-slate-950'
+                                : 'bg-white/10 hover:bg-white/20 text-white'
+                            }`}
+                          >
+                            {isSelected ? '✓' : 'Dooro'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -58,6 +58,38 @@ export const SHEIKH_VOICES: {
   icon: string;
 }[] = [
   {
+    id: 'alijaber',
+    name: 'Sh. Cali Jaabir (Ali Jaber)',
+    location: 'Masjid Al-Xaram',
+    country: '🕋 Makkah',
+    description: 'Imaamkii caanka ahaa ee Xaramka Makkah — cod aad u macaan oo qalbiga ruxaya.',
+    icon: '🕋',
+  },
+  {
+    id: 'ayyub',
+    name: 'Sh. Maxamed Ayuub (Muhammad Ayyub)',
+    location: 'Masjid Nabawi',
+    country: '🕌 Madinah',
+    description: 'Imaamkii caanka ahaa ee Masjidka Nabiga ﷺ — cod xasilloon oo qalbiga taabanaya.',
+    icon: '🕌',
+  },
+  {
+    id: 'badralturki',
+    name: 'Sh. Badr Al-Turki (Badr Al-Turkey)',
+    location: 'Masjid Al-Xaram',
+    country: '🕋 Makkah',
+    description: 'Imaamka Masjidka Xaramka ee Makkah — cod qiiro iyo khushuuc sare leh.',
+    icon: '🕋',
+  },
+  {
+    id: 'umar',
+    name: 'Umar Sildinskiy (Cumar Al-Sildinski)',
+    location: 'Caalamka Islaamka',
+    country: '🌙 Khushuuc',
+    description: 'Cod qiiro, deganaan iyo khushuuc sare leh oo aad loo jecel yahay.',
+    icon: '🎙️',
+  },
+  {
     id: 'makkah',
     name: 'Sh. Cali Mulla',
     location: 'Masjid Al-Xaram',
@@ -231,6 +263,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
 
   // Currently playing preview voice
   const [playingVoiceId, setPlayingVoiceId] = useState<AdhanVoice | null>(null);
+  const [expandedSheikhPicker, setExpandedSheikhPicker] = useState<'master' | PrayerName | null>(null);
   const [volume, setVolume] = useState<number>(100);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
@@ -1168,35 +1201,146 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
       {activeSubTab === 'prayers' && (
         <div className="space-y-6 animate-in fade-in">
           {/* Quick Info & Master Voice Selector */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-[#07242e] border border-teal-500/25 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
-            <div className="space-y-1">
-              <h3 className="text-base font-black text-white flex items-center gap-2">
-                <span>Dooro Codka Salaad Kasta Gaarkeeda</span>
-                <span className="text-xs font-normal text-teal-300/80">
-                  (Fajr, Duhur, Casar, Magrib, Cisha)
+          <div className="p-4 sm:p-5 rounded-3xl bg-[#07242e] border border-teal-500/25 space-y-4 shadow-xl">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <span>Dooro Codka Salaad Kasta Gaarkeeda</span>
+                  <span className="text-xs font-normal text-teal-300/80">
+                    (Fajr, Duhur, Casar, Magrib, Cisha)
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
+                  Riix shiiqa aad rabto, ka dibna riix badhanka <strong className="text-teal-300">▶️ Daar</strong> si aad codkiisa u maqasho ama <strong className="text-rose-300">⏹️ Dami</strong> si aad u joojiso ka hor intaadan dooran.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 self-stretch md:self-auto shrink-0">
+                <span className="text-xs text-teal-200 font-bold whitespace-nowrap">
+                  Codka Master-ka (Dhammaan):
                 </span>
-              </h3>
-              <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
-                Qof walba wuxuu dooran karaa codka uu rabo salaad kasta. Tusaale ahaan, waxaad Fajr u xulan kartaa Sh. Afasy ama Aadaanka Subaxa, Duhurna Sh. Cali Mulla (Makkah), Casarna Sh. Abdulbasit.
-              </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedSheikhPicker((prev) => (prev === 'master' ? null : 'master'))
+                  }
+                  className="bg-slate-900 hover:bg-slate-800 border border-teal-500/50 text-white font-bold text-xs rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2.5 transition cursor-pointer shadow-sm"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span>
+                      {(SHEIKH_VOICES.find((v) => v.id === (settings.adhanVoice || 'makkah')) || SHEIKH_VOICES[0]).icon}
+                    </span>
+                    <span>
+                      {(SHEIKH_VOICES.find((v) => v.id === (settings.adhanVoice || 'makkah')) || SHEIKH_VOICES[0]).name}
+                    </span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 text-[10px] font-black flex items-center gap-1">
+                    <span>🎧 Daar / Dooro</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform ${
+                        expandedSheikhPicker === 'master' ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 self-stretch md:self-auto shrink-0">
-              <span className="text-xs text-teal-200 font-bold whitespace-nowrap">
-                Codka Master-ka:
-              </span>
-              <select
-                value={settings.adhanVoice || 'makkah'}
-                onChange={(e) => handleApplyMasterVoiceToAll(e.target.value as AdhanVoice)}
-                className="bg-slate-900 border border-teal-500/40 text-white font-bold text-xs rounded-xl px-3 py-2 focus:ring-2 focus:ring-teal-400 focus:outline-none cursor-pointer"
-              >
-                {SHEIKH_VOICES.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} ({v.country})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Expandable Interactive Master Sheikh List with Play (Daar) & Stop (Dami) on every row */}
+            {expandedSheikhPicker === 'master' && (
+              <div className="p-3.5 rounded-2xl bg-black/50 border border-teal-400/40 space-y-2.5 animate-in fade-in">
+                <div className="flex items-center justify-between pb-1.5 border-b border-teal-500/20">
+                  <span className="text-xs font-black text-teal-300">
+                    🎙️ Liiska Shiiqyada — Riix &quot;Daar&quot; si aad u maqasho, &quot;Dami&quot; si aad u joojiso:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSheikhPicker(null)}
+                    className="text-[11px] font-bold text-slate-300 hover:text-white px-2 py-0.5 rounded-lg bg-white/10 cursor-pointer"
+                  >
+                    ✕ Xir
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+                  {SHEIKH_VOICES.map((v) => {
+                    const isSelected = (settings.adhanVoice || 'makkah') === v.id;
+                    const isPlayingThis = playingVoiceId === v.id;
+                    return (
+                      <div
+                        key={v.id}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition ${
+                          isSelected
+                            ? 'bg-teal-500/20 border-teal-400 shadow-sm'
+                            : 'bg-slate-900/80 border-white/10 hover:border-teal-500/40'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleApplyMasterVoiceToAll(v.id);
+                            setExpandedSheikhPicker(null);
+                          }}
+                          className="flex items-center gap-2 text-left flex-1 min-w-0 cursor-pointer"
+                        >
+                          <span className="text-lg shrink-0">{v.icon}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-white truncate">
+                              {v.name}
+                            </p>
+                            <p className="text-[10px] text-teal-300/80 truncate">
+                              {v.country} • {v.location}
+                            </p>
+                          </div>
+                        </button>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePlayVoice(v.id);
+                            }}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition cursor-pointer ${
+                              isPlayingThis
+                                ? 'bg-rose-500 hover:bg-rose-600 text-white shadow ring-1 ring-rose-300'
+                                : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 border border-amber-400/40'
+                            }`}
+                          >
+                            {isPlayingThis ? (
+                              <>
+                                <Square className="w-3 h-3 fill-current" />
+                                <span>Dami</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3 h-3 fill-current" />
+                                <span>Daar</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleApplyMasterVoiceToAll(v.id);
+                              setExpandedSheikhPicker(null);
+                            }}
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-400 text-slate-950'
+                                : 'bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white'
+                            }`}
+                          >
+                            {isSelected ? '✓ Xulan' : 'Dooro'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 5 Prayers Grid */}
@@ -1208,6 +1352,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
               const isVoicePlaying = playingVoiceId === prayerVoiceId;
               const prayerTimeFormatted = formatTime12(prayerTimes[p.key]);
               const prayerTime24 = decimalTo24Time(prayerTimes[p.key]);
+              const isPickerOpen = expandedSheikhPicker === p.key;
 
               return (
                 <div
@@ -1270,27 +1415,125 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                       )}
                     </div>
 
-                    {/* Sheikh Selection Dropdown */}
-                    <div className="space-y-1.5 pt-1">
-                      <label className="text-[11px] font-bold text-teal-200/90 block">
-                        Shiiqa Aadaamaya:
-                      </label>
-                      <div className="relative">
-                        <select
-                          value={prayerVoiceId}
-                          onChange={(e) =>
-                            handleSelectPrayerVoice(p.key, e.target.value as AdhanVoice)
+                    {/* Interactive Sheikh Picker Button & List (Daar / Dami on every Sheikh) */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-teal-200/90">
+                          Shiiqa Aadaamaya:
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedSheikhPicker((prev) => (prev === p.key ? null : p.key))
                           }
-                          className="w-full appearance-none bg-black/60 border border-teal-500/40 rounded-xl px-3 py-2.5 pr-8 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-teal-400 cursor-pointer"
+                          className="text-[10px] font-black text-amber-300 hover:text-amber-200 underline cursor-pointer"
                         >
-                          {SHEIKH_VOICES.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.name} — {v.country}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-4 h-4 text-teal-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          {isPickerOpen ? '✕ Xir Liiska Shiiqyada' : '🎧 Fur Liiska & Tijaabi Codadka'}
+                        </button>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedSheikhPicker((prev) => (prev === p.key ? null : p.key))
+                        }
+                        className="w-full bg-black/60 hover:bg-black/80 border border-teal-500/40 rounded-xl px-3 py-2.5 text-xs font-bold text-white flex items-center justify-between gap-2 transition cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2 truncate">
+                          <span className="text-base">{chosenSheikh.icon}</span>
+                          <span className="truncate">{chosenSheikh.name}</span>
+                          <span className="text-[10px] text-teal-300 shrink-0">({chosenSheikh.country})</span>
+                        </span>
+                        <ChevronDown
+                          className={`w-4 h-4 text-teal-400 shrink-0 transition-transform ${
+                            isPickerOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {/* Expandable Interactive Sheikh List with Play (Daar) & Stop (Dami) on every row */}
+                      {isPickerOpen && (
+                        <div className="p-2.5 rounded-2xl bg-black/80 border border-teal-400/40 space-y-1.5 max-h-64 overflow-y-auto animate-in fade-in">
+                          <p className="text-[10px] font-bold text-teal-300 px-1 pb-1 border-b border-teal-500/20">
+                            🎧 Riix &quot;Daar&quot; si aad u maqasho codka shiiqa, &quot;Dami&quot; si aad u joojiso:
+                          </p>
+                          {SHEIKH_VOICES.map((v) => {
+                            const isSelected = prayerVoiceId === v.id;
+                            const isPlayingThis = playingVoiceId === v.id;
+                            return (
+                              <div
+                                key={v.id}
+                                className={`p-2 rounded-xl border flex items-center justify-between gap-1.5 transition ${
+                                  isSelected
+                                    ? 'bg-teal-500/25 border-teal-400'
+                                    : 'bg-slate-900/90 border-white/10 hover:border-teal-500/40'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleSelectPrayerVoice(p.key, v.id);
+                                    setExpandedSheikhPicker(null);
+                                  }}
+                                  className="flex items-center gap-2 text-left flex-1 min-w-0 cursor-pointer"
+                                >
+                                  <span className="text-base shrink-0">{v.icon}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[11px] font-black text-white truncate">
+                                      {v.name}
+                                    </p>
+                                    <p className="text-[9px] text-teal-300/80 truncate">
+                                      {v.country}
+                                    </p>
+                                  </div>
+                                </button>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTogglePlayVoice(v.id);
+                                    }}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 transition cursor-pointer ${
+                                      isPlayingThis
+                                        ? 'bg-rose-500 hover:bg-rose-600 text-white shadow'
+                                        : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 border border-amber-400/40'
+                                    }`}
+                                  >
+                                    {isPlayingThis ? (
+                                      <>
+                                        <Square className="w-2.5 h-2.5 fill-current" />
+                                        <span>Dami</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="w-2.5 h-2.5 fill-current" />
+                                        <span>Daar</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleSelectPrayerVoice(p.key, v.id);
+                                      setExpandedSheikhPicker(null);
+                                    }}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-black transition cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-emerald-400 text-slate-950'
+                                        : 'bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white'
+                                    }`}
+                                  >
+                                    {isSelected ? '✓' : 'Dooro'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Sheikh Description */}
@@ -1320,12 +1563,12 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                       {isVoicePlaying ? (
                         <>
                           <Square className="w-3.5 h-3.5 fill-current" />
-                          <span>Jooji Aadaanka Hadda</span>
+                          <span>Dami Codka Shiiqa (Jooji)</span>
                         </>
                       ) : (
                         <>
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Dhagayso Codka Shiiqa 🎧</span>
+                          <span>Daar / Dhagayso Codka Shiiqa 🎧</span>
                         </>
                       )}
                     </button>
@@ -1335,13 +1578,13 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
             })}
           </div>
 
-          {/* All 8 Sheikh Showcase Catalog */}
+          {/* All 10 Sheikh Showcase Catalog */}
           <div className="p-5 sm:p-6 rounded-3xl bg-[#061e27] border border-teal-500/25 space-y-4">
             <h3 className="text-base font-black text-white flex items-center gap-2">
-              <span>Dhammaan Shiiqyada Caanka ah ee La Heli Karo (8 Cod)</span>
+              <span>Dhammaan Shiiqyada Caanka ah ee La Heli Karo ({SHEIKH_VOICES.length} Cod)</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {SHEIKH_VOICES.map((voice) => {
                 const isSelectedMaster = (settings.adhanVoice || 'makkah') === voice.id;
                 const isAudioActive = playingVoiceId === voice.id;
@@ -1372,7 +1615,7 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handleTogglePlayVoice(voice.id)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition ${
+                        className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
                           isAudioActive
                             ? 'bg-rose-500 text-white'
                             : 'bg-teal-500/20 hover:bg-teal-500/30 text-teal-200'
@@ -1383,13 +1626,13 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                         ) : (
                           <Play className="w-3 h-3 fill-current" />
                         )}
-                        <span>{isAudioActive ? 'Jooji' : 'Dhagayso'}</span>
+                        <span>{isAudioActive ? 'Dami' : 'Daar'}</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleApplyMasterVoiceToAll(voice.id)}
-                        className={`text-[10px] font-black px-2 py-1.5 rounded-lg transition ${
+                        className={`text-[10px] font-black px-2 py-1.5 rounded-lg transition cursor-pointer ${
                           isSelectedMaster
                             ? 'bg-emerald-500 text-slate-950'
                             : 'text-slate-300 hover:text-white bg-white/5 hover:bg-white/10'
@@ -1741,23 +1984,89 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
                   ))}
                 </div>
 
-                {/* If Adhan, pick Sheikh */}
+                {/* If Adhan, pick Sheikh with Interactive Play (Daar) & Stop (Dami) List */}
                 {alarmFormSound === 'adhan' && (
-                  <div className="pt-2">
-                    <label className="text-[11px] font-bold text-slate-300 block mb-1">
-                      Dooro Shiiqa Aadaanka:
-                    </label>
-                    <select
-                      value={alarmFormVoice}
-                      onChange={(e) => setAlarmFormVoice(e.target.value as AdhanVoice)}
-                      className="w-full bg-black/60 border border-teal-500/30 rounded-xl px-3 py-2.5 text-xs font-bold text-white focus:outline-none cursor-pointer"
-                    >
-                      {SHEIKH_VOICES.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name} ({v.country})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="pt-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-teal-200">
+                        Dooro Shiiqa Aadaanka (Riix &quot;Daar&quot; si aad u maqasho):
+                      </label>
+                      <span className="text-[10px] font-bold text-amber-300">
+                        {SHEIKH_VOICES.length} Shiiq
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto p-2 rounded-2xl bg-black/60 border border-teal-500/30">
+                      {SHEIKH_VOICES.map((v) => {
+                        const isSelected = alarmFormVoice === v.id;
+                        const isPlayingThis = playingVoiceId === v.id;
+                        return (
+                          <div
+                            key={v.id}
+                            className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition ${
+                              isSelected
+                                ? 'bg-teal-500/25 border-teal-400 shadow-sm'
+                                : 'bg-slate-900/80 border-white/10 hover:border-teal-500/40'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setAlarmFormVoice(v.id)}
+                              className="flex items-center gap-2 text-left flex-1 min-w-0 cursor-pointer"
+                            >
+                              <span className="text-base shrink-0">{v.icon}</span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-black text-white truncate">
+                                  {v.name}
+                                </p>
+                                <p className="text-[10px] text-teal-300/80 truncate">
+                                  {v.country} • {v.location}
+                                </p>
+                              </div>
+                            </button>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePlayVoice(v.id);
+                                }}
+                                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition cursor-pointer ${
+                                  isPlayingThis
+                                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow'
+                                    : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 border border-amber-400/40'
+                                }`}
+                              >
+                                {isPlayingThis ? (
+                                  <>
+                                    <Square className="w-3 h-3 fill-current" />
+                                    <span>Dami</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="w-3 h-3 fill-current" />
+                                    <span>Daar</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setAlarmFormVoice(v.id)}
+                                className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-400 text-slate-950'
+                                    : 'bg-white/10 hover:bg-teal-500 hover:text-slate-950 text-white'
+                                }`}
+                              >
+                                {isSelected ? '✓ Xulan' : 'Dooro'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 

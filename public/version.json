@@ -1,13 +1,13 @@
 {
-  "version": "2.9.6",
-  "build": 75,
+  "version": "2.9.8",
+  "build": 77,
   "releaseDate": "2026-11-05",
   "minSupportedVersion": "2.0.0",
-  "title": "Tuko Salaad & Adhkaar v2.9.6",
+  "title": "Tuko Salaad & Adhkaar v2.9.8",
   "changelog": [
-    "Qayb Cusub — Codadka Dabeecadda & Deganaanshaha (24/7 Background): Codka Roobka, Shimbiraha, Dabka, Hirarka Badda, Durdurka Biyaha, Onkodka, Dabaysha & Habeenka",
-    "Isku-darka Codadka (Sound Mixer) + Saacadda Hurdada (Sleep Timer) + Mini-Player ka shaqeeya qayb kasta oo app-ka ah",
-    "Shaashadda Aadaanka & Adhkaarta (Post-Prayer Dhikr): Aadaan kasta wuxuu ku soo dhacayaa isla daqiiqadda aad u xirtay",
-    "Toos uga beddel waqtiga Aadaanka kaarka salaad kasta (Subax, Duhur, Casar, Magrib, Cisha) ama Jadwalka Salaadda"
+    "Shiiqyo Cusub: Sheikh Cali Jaabir (Ali Jaber), Sheikh Maxamed Ayuub (Muhammad Ayyub), Sheikh Badr Al-Turki & Umar Sildinskiy oo lagu daray Quraanka, Aadaanka & Alaarmka",
+    "Liiska Shiiqyada oo leh Badhanka '▶️ Daar' iyo '⏹️ Dami': Shiiq kasta codkiisa waad dhagaysan kartaa waadna damin kartaa ka hor intaadan dooran",
+    "Qaybta Codadka Dabeecadda (24/7 Background): Codka Roobka, Shimbiraha, Dabka, Hirarka Badda, Durdurka Biyaha & Onkodka",
+    "Shaashadda Aadaanka & Adhkaarta (Post-Prayer Dhikr) oo ku soo dhacaysa daqiiqad kasta oo aad u xirtay"
   ]
 }

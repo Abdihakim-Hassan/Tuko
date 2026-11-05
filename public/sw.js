@@ -1,5 +1,5 @@
-// Tuko Service Worker v75 — 100% Full Offline Mode Across All 12 Sections & All 114 Surahs
-const CACHE_NAME = 'tuko-pwa-v75';
+// Tuko Service Worker v77 — 100% Full Offline Mode Across All 12 Sections & All 114 Surahs
+const CACHE_NAME = 'tuko-pwa-v77';
 const QURAN_DATA_CACHE = 'tuko-quran-data-v1';
 const QURAN_AUDIO_CACHE = 'tuko-audio-cache-v2';
 
@@ -26,6 +26,10 @@ const ADHAN_AUDIO_ASSETS = [
   '/audio/adhan_minshawi.mp3',
   '/audio/adhan_qatami.mp3',
   '/audio/adhan_zahrani.mp3',
+  '/audio/adhan_alijaber.mp3',
+  '/audio/adhan_umar.mp3',
+  '/audio/adhan_ayyub.mp3',
+  '/audio/adhan_badralturki.mp3',
 ];
 
 // All 114 Surahs (Uthmani Arabic + Somali Translation) built into /data/quran/{1..114}.json
