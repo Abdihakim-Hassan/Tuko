@@ -415,14 +415,28 @@ export const SalaadView: React.FC<SalaadViewProps> = ({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => onTriggerAdhaanOverlay(nextInfo.nextPrayer)}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 font-black text-xs hover:brightness-110 shadow-md shadow-teal-500/20 transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span>{isEn ? 'Adhkaar' : 'Adhkaarta'}</span>
-          </button>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {onOpenTab && (
+              <button
+                type="button"
+                onClick={() => onOpenTab('ambient')}
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-black text-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                title="Daar codka roobka, shimbiraha, dabka iyo badda (Background)"
+              >
+                <span>🌧️🐦</span>
+                <span>{isEn ? 'Nature Sounds' : 'Codka Dabeecadda'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onTriggerAdhaanOverlay(nextInfo.nextPrayer)}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 text-slate-950 font-black text-xs hover:brightness-110 shadow-md shadow-teal-500/20 transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>{isEn ? 'Adhkaar' : 'Adhkaarta'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

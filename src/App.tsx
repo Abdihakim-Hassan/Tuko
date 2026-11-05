@@ -41,6 +41,8 @@ import { CalendarView } from './components/CalendarView';
 import { StatsView } from './components/StatsView';
 import { SettingsView } from './components/SettingsView';
 import { ToDoView } from './components/ToDoView';
+import { AmbientSoundsView, AmbientMiniPlayer } from './components/AmbientSoundsView';
+import { ambientSounds } from './utils/ambientSoundService';
 import { AppSettings, AppUserProfile, AppAnnouncement, CustomAlarm, CustomDua, DayData, PrayerName, SalaahRecord, SalaahStatus, TodoItem } from './types';
 import {
   calculateStreaks,
@@ -1339,6 +1341,9 @@ export default function App() {
             }
 
             // 1. Play authentic Adhan sound for this prayer's chosen voice (enabled by default)
+            if (ambientSounds.getState().isAnyPlaying) {
+              ambientSounds.pauseOrResumeAll();
+            }
             if (settings.adhanSound !== false) {
               const prayerVoice = settings.prayerVoices?.[p] || settings.adhanVoice || 'makkah';
               audioAlerts.playAdhan(p === 'Fajr', undefined, prayerVoice);
@@ -1385,6 +1390,9 @@ export default function App() {
             }
 
             // Start playing alarm audio immediately
+            if (ambientSounds.getState().isAnyPlaying) {
+              ambientSounds.pauseOrResumeAll();
+            }
             audioAlerts.playAlarm(alarm.sound, alarm.selectedVoice || 'makkah');
 
             // Trigger alarm overlay
@@ -2457,6 +2465,12 @@ export default function App() {
         />
       )}
 
+      {/* Global Background Ambient Nature Sounds Mini-Player Bar */}
+      <AmbientMiniPlayer
+        currentTab={currentTab}
+        onOpenAmbientTab={() => setCurrentTab('ambient')}
+      />
+
       {/* Main Content Area (React Native ScrollView + Responsive Container for Mobile, Tablet & Laptop) */}
       <RNScrollView activeTabKey={currentTab}>
         {currentTab === 'salaad' && (
@@ -2545,6 +2559,10 @@ export default function App() {
 
           {currentTab === 'tasbeeh' && (
             <TasbeehView dayData={currentDayData} onUpdateTasbeeh={handleUpdateTasbeeh} />
+          )}
+
+          {currentTab === 'ambient' && (
+            <AmbientSoundsView onNavigateTab={(t) => setCurrentTab(t)} />
           )}
 
           {currentTab === 'soon' && (

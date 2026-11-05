@@ -17,6 +17,7 @@ import {
   Wifi,
   WifiOff,
   RotateCcw,
+  CloudRain,
 } from 'lucide-react';
 import { TukoLogo } from './TukoLogo';
 import { AppSettings } from '../types';
@@ -117,6 +118,15 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
         shortSo: 'Tasbiix',
         shortEn: 'Tasbeeh',
         icon: Flame,
+      },
+      {
+        id: 'ambient',
+        labelSo: 'Codadka Dabeecadda',
+        labelEn: 'Nature Sounds',
+        shortSo: 'Dabeecad',
+        shortEn: 'Nature',
+        icon: CloudRain,
+        badge: '🌿',
       },
     ],
   },

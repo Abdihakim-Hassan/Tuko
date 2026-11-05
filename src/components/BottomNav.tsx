@@ -13,6 +13,7 @@ import {
   Settings,
   Bell,
   Star,
+  CloudRain,
 } from 'lucide-react';
 import { useLanguage } from '../utils/i18n';
 
@@ -36,6 +37,7 @@ const SECTION_META: Record<
   qibla: { labelSo: 'Qibla', labelEn: 'Qibla', icon: Navigation },
   soon: { labelSo: 'Soon', labelEn: 'Fasting', icon: Moon },
   tasbeeh: { labelSo: 'Tasbiix', labelEn: 'Tasbeeh', icon: Flame },
+  ambient: { labelSo: 'Dabeecad', labelEn: 'Nature', icon: CloudRain },
   todo: { labelSo: 'To-Do', labelEn: 'To-Do', icon: CheckSquare },
   calendar: { labelSo: 'Kalandar', labelEn: 'Calendar', icon: Calendar },
   stats: { labelSo: 'Tirakoob', labelEn: 'Stats', icon: BarChart3 },

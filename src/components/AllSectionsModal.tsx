@@ -17,6 +17,7 @@ import {
   Check,
   Star,
   RotateCcw,
+  CloudRain,
 } from 'lucide-react';
 
 export interface SectionItem {
@@ -85,6 +86,16 @@ export const ALL_SECTIONS: SectionItem[] = [
     category: 'quran',
     icon: Flame,
     color: 'from-amber-400 to-orange-500',
+  },
+  {
+    id: 'ambient',
+    title: 'Codadka Dabeecadda',
+    shortTitle: 'Dabeecad',
+    subtitle: 'Roob, Shimbiraha, Dabka & Badda (24/7)',
+    category: 'quran',
+    icon: CloudRain,
+    badge: 'Cusub 🌿',
+    color: 'from-emerald-400 to-cyan-500',
   },
   {
     id: 'soon',
