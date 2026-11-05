@@ -42,6 +42,7 @@ import { StatsView } from './components/StatsView';
 import { SettingsView } from './components/SettingsView';
 import { ToDoView } from './components/ToDoView';
 import { AmbientSoundsView, AmbientMiniPlayer } from './components/AmbientSoundsView';
+import { StitchSamplePreview } from './components/StitchSamplePreview';
 import { ambientSounds } from './utils/ambientSoundService';
 import { AppSettings, AppUserProfile, AppAnnouncement, CustomAlarm, CustomDua, DayData, PrayerName, SalaahRecord, SalaahStatus, TodoItem } from './types';
 import {
@@ -180,6 +181,7 @@ export default function App() {
   const [showVideoTourModal, setShowVideoTourModal] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState<boolean>(false);
+  const [isStitchSampleMode, setIsStitchSampleMode] = useState<boolean>(false);
   const [quranReaderState, setQuranReaderState] = useState<{ isOpen: boolean; surahNumber: number }>({
     isOpen: false,
     surahNumber: 1,
@@ -2269,6 +2271,49 @@ export default function App() {
 
       {/* Offline Mode & Network Connection Status Banner */}
       <OfflineBanner />
+
+      {/* 1-Tap Non-Destructive Google Stitch Sample UI Toggle Banner */}
+      {!isStitchSampleMode && (
+        <div className="max-w-4xl mx-auto w-full px-3 sm:px-4 pt-2.5">
+          <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-[#1e1b14] via-[#2d2616] to-[#0B2933] border border-[#E5C158]/40 shadow-lg flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base shrink-0">✨</span>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-[#ffde82] truncate">
+                  Naqshadda Cusub ee Google Stitch (Sample Mode)
+                </p>
+                <p className="text-[10px] text-[#d0c5b1] truncate">
+                  Tijaabi 7-da shaashadood ee cusub adigoo aan waxba ka beddelin app-kaagii hore!
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsStitchSampleMode(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#ffde82] to-[#e5c158] text-[#241a00] font-black text-xs shadow hover:brightness-110 active:scale-95 transition shrink-0 cursor-pointer"
+            >
+              🎨 Fur Sample-ka
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Full Interactive Stitch Sample Preview Mode (when active, replaces view safely) */}
+      {isStitchSampleMode && (
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-[#16130c]">
+          <StitchSamplePreview
+            onExitSample={() => setIsStitchSampleMode(false)}
+            dayData={currentDayData}
+            prayerTimes={prayerTimes}
+            settings={settings}
+            streakDays={streakStats.currentAllStreak}
+            onUpdateSettings={handleUpdateSettings}
+            onUpdatePrayer={handleUpdatePrayer}
+            onTriggerAdhaanOverlay={(prayer) => setActiveAdhaanOverlayPrayer(prayer)}
+            onOpenOriginalTab={(tab) => setCurrentTab(tab as any)}
+          />
+        </div>
+      )}
 
       {/* Broadcast Announcements from Admin */}
       {activeAnnouncements

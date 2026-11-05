@@ -1,13 +1,13 @@
 {
-  "version": "2.9.9",
-  "build": 78,
+  "version": "3.0.0",
+  "build": 79,
   "releaseDate": "2026-11-05",
   "minSupportedVersion": "2.0.0",
-  "title": "Tuko Salaad & Adhkaar v2.9.8",
+  "title": "Tuko Salaad & Adhkaar v3.0.0",
   "changelog": [
-    "Shiiqyo Cusub: Sheikh Cali Jaabir (Ali Jaber), Sheikh Maxamed Ayuub (Muhammad Ayyub), Sheikh Badr Al-Turki & Umar Sildinskiy oo lagu daray Quraanka, Aadaanka & Alaarmka",
+    "Naqshadda Cusub ee Google Stitch (Sample Mode): Ku tijaabi 7-da shaashadood ee cusub ('🎨 Fur Sample-ka') adigoo 1 riixis ugu laaban kara naqshaddii hore ('↩️ Ku Noqo Naqshaddii Hore')",
+    "Shiiqyo Cusub: Sheikh Cali Jaabir (Ali Jaber), Sheikh Maxamed Ayuub (Muhammad Ayyub), Sheikh Badr Al-Turki & Umar Sildinskiy oo leh codadkooda saxda ah",
     "Liiska Shiiqyada oo leh Badhanka '▶️ Daar' iyo '⏹️ Dami': Shiiq kasta codkiisa waad dhagaysan kartaa waadna damin kartaa ka hor intaadan dooran",
-    "Qaybta Codadka Dabeecadda (24/7 Background): Codka Roobka, Shimbiraha, Dabka, Hirarka Badda, Durdurka Biyaha & Onkodka",
-    "Shaashadda Aadaanka & Adhkaarta (Post-Prayer Dhikr) oo ku soo dhacaysa daqiiqad kasta oo aad u xirtay"
+    "Qaybta Codadka Dabeecadda (24/7 Background): Codka Roobka, Shimbiraha, Dabka, Hirarka Badda, Durdurka Biyaha & Onkodka"
   ]
 }
