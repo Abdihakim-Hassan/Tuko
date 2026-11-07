@@ -1,13 +1,11 @@
 {
-  "version": "3.0.1",
-  "build": 80,
+  "version": "3.0.2",
+  "build": 81,
   "releaseDate": "2026-11-07",
   "minSupportedVersion": "2.0.0",
-  "title": "Tuko Salaad & Adhkaar v3.0.1",
+  "title": "Tuko Salaad & Adhkaar v3.0.2",
   "changelog": [
-    "Saxitaanka Cilladda Aadaanka: Aadaanka oo aan marnaba soo dhicin xilli aan xilligiisa ahayn.",
-    "Waqtiyada Saxda ah ee Magaalada: Xisaabinta tooska ah ee xilliyada salaadda magaaladaada maalin kasta iyadoon lagu xayirnayn jadwal go'an.",
-    "Joojinta Aadaanka Soo Daaha: Haddii app-ka la furo xilli salaaddu dhaaftay, aadaanku mar dambe dib uma soo yeerayo.",
-    "Xaqiijinta Android Native Alarm & Push: Qalabka oo kaliya loogu diro salaadaha soo socda ee mustaqbalka."
+    "Shaashadda Salaadda Hadda Lagu Jiraa (Active Prayer): Marka aadaanku dhaco, shaashaddu waxay si toos ah u haysanaysaa salaadda hadda lagu jiro (sida Cisha) ilaa inta waqtiga salaadda iyo aqinku ka dhamaanayaan, halkii ay markiiba ugu boodi lahayd Subax.",
+    "Tirinta Ka Dhiman Aqinka (Iqama Countdown): Waxaa la arkayaa waqtiga ka dhiman aqinka iyo batoonka degdegga ah ee '✓ Waan Tukaday'."
   ]
 }

@@ -13,6 +13,7 @@ import {
   PRAYER_SHORT_LABELS,
   formatTime12,
   getNextPrayerInfo,
+  getActiveOrNextPrayerState,
 } from '../utils/prayerTimes';
 import { audioAlerts } from '../utils/audioAlerts';
 import { SHEIKH_VOICES } from './AdhanView';
@@ -109,6 +110,7 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
   onOpenOriginalTab,
 }) => {
   const [activeScreen, setActiveScreen] = useState<StitchScreenId>('hoyga');
+  const [viewMode, setViewMode] = useState<'interactive' | 'raw_html'>('interactive');
   const [nowDate, setNowDate] = useState<Date>(() => new Date());
 
   // Adhan voice preview state
@@ -156,11 +158,18 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
     };
   }, [quranAudioEl]);
 
-  // Calculate live next prayer countdown
+  // Calculate live active prayer or next prayer countdown
+  const activeOrNext = getActiveOrNextPrayerState(prayerTimes, nowDate, settings.customSchedule);
   const nextInfo = getNextPrayerInfo(prayerTimes, nowDate);
-  const nextPrayerKey = nextInfo.nextPrayer;
-  const nextPrayerLabel = PRAYER_SHORT_LABELS[nextPrayerKey] || nextPrayerKey;
-  const totalSecs = Math.max(0, nextInfo.minutesRemaining * 60 - nowDate.getSeconds());
+  const nextPrayerKey = activeOrNext.isActive ? activeOrNext.currentPrayer! : activeOrNext.nextPrayer;
+  const nextPrayerLabel = activeOrNext.isActive
+    ? activeOrNext.currentPrayerLabel
+    : (PRAYER_SHORT_LABELS[nextPrayerKey] || nextPrayerKey);
+
+  const totalSecs = activeOrNext.isActive
+    ? (activeOrNext.isBeforeIqama ? activeOrNext.secondsToIqama : 0)
+    : activeOrNext.secondsToNextPrayer;
+
   const cHours = String(Math.floor(totalSecs / 3600)).padStart(2, '0');
   const cMins = String(Math.floor((totalSecs % 3600) / 60)).padStart(2, '0');
   const cSecs = String(totalSecs % 60).padStart(2, '0');
@@ -270,15 +279,17 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
   const currentMasterSheikh =
     SHEIKH_VOICES.find((v) => v.id === currentMasterVoiceId) || SHEIKH_VOICES[0];
 
-  const screensList: { id: StitchScreenId; label: string; icon: string }[] = [
-    { id: 'hoyga', label: '1. Hoyga', icon: '🏠' },
-    { id: 'aadaan', label: '2. Codadka Aadaanka', icon: '🔊' },
-    { id: 'alaarm', label: '3. Alaarmka', icon: '⏰' },
-    { id: 'quraan', label: '4. Quraanka', icon: '📖' },
-    { id: 'dabeecad', label: '5. Dabeecadda', icon: '🌧️' },
-    { id: 'adhkaar', label: '6. Adhkaarta', icon: '📿' },
-    { id: 'qibla', label: '7. Qiblada & Zako', icon: '🧭' },
+  const screensList: { id: StitchScreenId; label: string; icon: string; htmlPath: string }[] = [
+    { id: 'hoyga', label: '1. Hoyga', icon: '🏠', htmlPath: '/stitch/tuko_hoyga/code.html' },
+    { id: 'aadaan', label: '2. Codadka Aadaanka', icon: '🔊', htmlPath: '/stitch/tuko_codadka_aadaanka/code.html' },
+    { id: 'alaarm', label: '3. Alaarmka', icon: '⏰', htmlPath: '/stitch/tuko_alaarmka_toosidda/code.html' },
+    { id: 'quraan', label: '4. Quraanka', icon: '📖', htmlPath: '/stitch/tuko_maktabadda_quraanka_kariimka_tafsiirka/code.html' },
+    { id: 'dabeecad', label: '5. Dabeecadda', icon: '🌧️', htmlPath: '/stitch/tuko_codadka_dabeecadda/code.html' },
+    { id: 'adhkaar', label: '6. Adhkaarta', icon: '📿', htmlPath: '/stitch/tuko_adhkaarta_subaxa_galabta_tasbiixda/code.html' },
+    { id: 'qibla', label: '7. Qiblada & Zako', icon: '🧭', htmlPath: '/stitch/tuko_qiblada_masaajidda/code.html' },
   ];
+
+  const activeScreenObj = screensList.find((s) => s.id === activeScreen) || screensList[0];
 
   return (
     <div className="min-h-screen w-full bg-[#16130c] text-[#e9e1d6] font-sans pb-28 selection:bg-[#ffde82]/30 selection:text-[#ffde82]">
@@ -287,14 +298,30 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
       {/* ===================================================================== */}
       <div className="sticky top-0 z-50 bg-[#110e08]/95 backdrop-blur-xl border-b border-[#E5C158]/30 px-3 py-2.5 shadow-2xl">
         <div className="max-w-lg mx-auto flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full bg-[#ffde82]/20 border border-[#ffde82]/50 text-[#ffde82] text-[10px] font-black uppercase tracking-wider">
-                ✨ Stitch Sample UI
-              </span>
-              <span className="text-xs font-bold text-[#d0c5b1] hidden sm:inline">
-                Naqshaddii Hore waxba lagama beddelin!
-              </span>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('interactive')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                  viewMode === 'interactive'
+                    ? 'bg-[#2DD4BF] text-[#003730] shadow'
+                    : 'bg-[#221f18] text-[#d0c5b1] border border-[#E5C158]/25'
+                }`}
+              >
+                ⚡ Shaqaynaya (Interactive)
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('raw_html')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                  viewMode === 'raw_html'
+                    ? 'bg-[#ffde82] text-[#241a00] shadow'
+                    : 'bg-[#221f18] text-[#d0c5b1] border border-[#E5C158]/25'
+                }`}
+              >
+                🖼️ Asalka Stitch (1:1 HTML)
+              </button>
             </div>
 
             <button
@@ -305,7 +332,7 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
               }}
               className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#ffde82] to-[#e5c158] text-[#241a00] font-black text-xs shadow-lg hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
             >
-              <span>↩️ Ku Noqo Naqshaddii Hore</span>
+              <span>↩️ Naqshaddii Hore</span>
             </button>
           </div>
 
@@ -332,6 +359,18 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
           </div>
         </div>
       </div>
+
+      {viewMode === 'raw_html' ? (
+        <div className="max-w-lg mx-auto w-full h-[calc(100vh-140px)] bg-[#16130c]">
+          <iframe
+            key={activeScreenObj.htmlPath}
+            src={activeScreenObj.htmlPath}
+            title={activeScreenObj.label}
+            className="w-full h-full border-0 rounded-b-2xl"
+          />
+        </div>
+      ) : (
+        <>
 
       {/* ===================================================================== */}
       {/* STITCH TOP HEADER BAR (TUKO • MUQDISHO • STREAK • BELL • PROFILE)     */}
@@ -384,9 +423,19 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
               </div>
 
               <div className="relative z-10 flex flex-col items-center text-center gap-1.5 mb-4">
-                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#e5c158]/10 border border-[#E5C158]/30 text-[#E5C158] text-xs font-bold tracking-wider uppercase">
-                  <span>🕌</span>
-                  <span>SALAADDA XIGTA • {nextPrayerLabel.toUpperCase()}</span>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full border text-xs font-bold tracking-wider uppercase ${
+                    activeOrNext.isActive
+                      ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                      : 'bg-[#e5c158]/10 border-[#E5C158]/30 text-[#E5C158]'
+                  }`}
+                >
+                  <span>{activeOrNext.isActive ? '🟢' : '🕌'}</span>
+                  <span>
+                    {activeOrNext.isActive
+                      ? `WAQTIGII SALAADDA • ${activeOrNext.currentPrayerLabel.toUpperCase()} (LAGU JIRAA)`
+                      : `SALAADDA XIGTA • ${nextPrayerLabel.toUpperCase()}`}
+                  </span>
                 </span>
 
                 <div className="font-serif text-xl text-[#E5C158] mt-1">
@@ -394,12 +443,19 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
                 </div>
 
                 <div className="my-1 font-mono text-4xl font-extrabold tracking-widest text-[#ffde82] drop-shadow-[0_0_15px_rgba(229,193,88,0.35)]">
-                  {cHours} : {cMins} : {cSecs}
+                  {activeOrNext.isActive && !activeOrNext.isBeforeIqama ? (
+                    <span className="text-2xl sm:text-3xl text-emerald-300">WAA WAQTIGII SALAADDA</span>
+                  ) : (
+                    `${cHours} : ${cMins} : ${cSecs}`
+                  )}
                 </div>
 
                 <p className="text-xs text-[#d0c5b1]">
-                  Waqtiga ka dhiman inta laga gaarayo {nextPrayerLabel} (
-                  {nextInfo.timeString})
+                  {activeOrNext.isActive
+                    ? activeOrNext.isBeforeIqama
+                      ? `Ka dhiman Aqinka • Waqtiga: ${activeOrNext.activeIqamaTimeStr}`
+                      : 'Waa xilligii cibaadada & gudashada salaadda'
+                    : `Waqtiga ka dhiman inta laga gaarayo ${nextPrayerLabel} (${activeOrNext.nextPrayerTimeString})`}
                 </p>
               </div>
 
@@ -1756,6 +1812,8 @@ export const StitchSamplePreview: React.FC<StitchSamplePreviewProps> = ({
           })}
         </div>
       </nav>
+      </>
+      )}
     </div>
   );
 };

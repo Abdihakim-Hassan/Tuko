@@ -43,6 +43,8 @@ import {
   formatTime12,
   timeStringToDecimal,
   getNextPrayerInfo,
+  getActiveOrNextPrayerState,
+  ActiveOrNextPrayerState,
 } from '../utils/prayerTimes';
 import { DailyWisdomCard } from './DailyWisdomCard';
 import { FridaySpecialCard } from './FridaySpecialCard';
@@ -125,22 +127,20 @@ export const SalaadView: React.FC<SalaadViewProps> = ({
     };
   }, []);
 
+  const activeOrNext = useMemo(
+    () => getActiveOrNextPrayerState(prayerTimes, now, settings.customSchedule),
+    [prayerTimes, now, settings.customSchedule]
+  );
+
   const nextInfo = useMemo(() => getNextPrayerInfo(prayerTimes, now), [prayerTimes, now]);
 
-  // Exact real-time countdown with seconds
+  // Exact real-time countdown with seconds (Countdown to Iqama if active prayer, or Countdown to next prayer)
   const liveCountdownSecs = useMemo(() => {
-    const currentHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-    for (const prayer of PRAYER_ORDER) {
-      const prayerTime = prayerTimes[prayer];
-      if (prayerTime > currentHour) {
-        return Math.max(0, Math.round((prayerTime - currentHour) * 3600));
-      }
+    if (activeOrNext.isActive) {
+      return activeOrNext.isBeforeIqama ? activeOrNext.secondsToIqama : 0;
     }
-    // All prayers today passed -> Tomorrow's Fajr
-    const secsToMidnight = Math.max(0, Math.round((24 - currentHour) * 3600));
-    const fajrSecs = Math.round(prayerTimes.Fajr * 3600);
-    return secsToMidnight + fajrSecs;
-  }, [prayerTimes, now]);
+    return activeOrNext.secondsToNextPrayer;
+  }, [activeOrNext]);
 
   const countdownParts = useMemo(() => {
     const h = Math.floor(liveCountdownSecs / 3600);
@@ -324,47 +324,111 @@ export const SalaadView: React.FC<SalaadViewProps> = ({
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0a2731] via-[#093540] to-[#052129] border border-teal-500/35 p-4 sm:p-5 shadow-2xl shadow-teal-950/60 space-y-4">
         <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-teal-400/10 blur-3xl pointer-events-none" />
 
-        {/* Top Row: Next Prayer Name + Countdown */}
+        {/* Top Row: Active Prayer OR Next Prayer + Countdown */}
         <div className="flex items-center justify-between gap-3 relative z-10">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full ${
+                    activeOrNext.isActive ? 'bg-emerald-400' : 'bg-cyan-400'
+                  } opacity-75`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    activeOrNext.isActive ? 'bg-emerald-500' : 'bg-cyan-500'
+                  }`}
+                ></span>
               </span>
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-300">
-                Salaadda Xigta
+              <span
+                className={`text-[11px] font-extrabold uppercase tracking-wider ${
+                  activeOrNext.isActive ? 'text-emerald-300' : 'text-cyan-300'
+                }`}
+              >
+                {activeOrNext.isActive
+                  ? isEn
+                    ? '🟢 Current Prayer (Active)'
+                    : '🟢 Waqtigii Salaadda (Lagu Jiraa)'
+                  : isEn
+                  ? 'Next Prayer'
+                  : 'Salaadda Xigta'}
               </span>
             </div>
 
             <h2 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2 flex-wrap leading-tight">
-              <span>{PRAYER_SOMALI_LABELS[nextInfo.nextPrayer]}</span>
-              {isFriday && nextInfo.nextPrayer === 'Duhur' && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Jumcah 🕌
-                </span>
-              )}
+              <span>
+                {activeOrNext.isActive
+                  ? activeOrNext.currentPrayerLabel
+                  : activeOrNext.nextPrayerLabel}
+              </span>
+              {isFriday &&
+                (activeOrNext.isActive
+                  ? activeOrNext.currentPrayer === 'Duhur'
+                  : activeOrNext.nextPrayer === 'Duhur') && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Jumcah 🕌
+                  </span>
+                )}
             </h2>
 
-            <p className="text-xs text-teal-200/85 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
-              <span>Aadaanka:</span>
-              <span className="font-mono tabular-nums font-black text-amber-300 bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 rounded-lg">
-                {nextInfo.timeString}
-              </span>
-            </p>
+            <div className="text-xs text-teal-200/85 mt-1 font-medium flex items-center gap-2 flex-wrap">
+              {activeOrNext.isActive ? (
+                <>
+                  <span className="flex items-center gap-1">
+                    <span className="text-slate-300">Aadaankii:</span>
+                    <span className="font-mono tabular-nums font-black text-amber-300 bg-amber-500/15 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
+                      {activeOrNext.activeAdhanTimeStr}
+                    </span>
+                  </span>
+                  {activeOrNext.activeIqamaTimeStr && (
+                    <span className="flex items-center gap-1">
+                      <span className="text-slate-300">• Aqinka:</span>
+                      <span className="font-mono tabular-nums font-black text-emerald-300 bg-emerald-500/15 border border-emerald-400/30 px-1.5 py-0.5 rounded-md">
+                        {activeOrNext.activeIqamaTimeStr}
+                      </span>
+                    </span>
+                  )}
+                </>
+              ) : (
+                <p className="flex items-center gap-1.5">
+                  <span>Aadaanka:</span>
+                  <span className="font-mono tabular-nums font-black text-amber-300 bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 rounded-lg">
+                    {activeOrNext.nextPrayerTimeString}
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Compact Digital Countdown Box */}
           <div className="shrink-0 text-right" data-no-translate="true">
-            {liveCountdownSecs <= 0 ? (
+            {activeOrNext.isActive && !activeOrNext.isBeforeIqama ? (
+              <div className="px-3.5 py-2.5 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-center shadow-inner">
+                <div className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300 mb-0.5 flex items-center justify-center gap-1">
+                  <span>🕌</span>
+                  <span>{isEn ? 'Prayer Time' : 'Waa Waqtigii'}</span>
+                </div>
+                <div className="text-xs font-black text-white">
+                  {isEn ? 'In Progress' : 'Lagu Jiraa 🤲'}
+                </div>
+              </div>
+            ) : liveCountdownSecs <= 0 ? (
               <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-sm font-black text-amber-300">
-                {isEn ? "🕌 Prayer Time!" : '🕌 Waqtigii!'}
+                {isEn ? '🕌 Prayer Time!' : '🕌 Waqtigii!'}
               </div>
             ) : (
               <div className="px-3 py-2 rounded-2xl bg-slate-950/60 border border-teal-400/35 text-center shadow-inner">
                 <div className="text-[9px] font-extrabold uppercase tracking-wider text-teal-300 mb-1 flex items-center justify-center gap-1">
                   <Clock className="w-3 h-3 text-cyan-300" />
-                  <span>{isEn ? 'Remaining' : 'Ka dhiman'}</span>
+                  <span>
+                    {activeOrNext.isActive && activeOrNext.isBeforeIqama
+                      ? isEn
+                        ? 'Until Iqama'
+                        : 'Ka dhiman Aqinka'
+                      : isEn
+                      ? 'Remaining'
+                      : 'Ka dhiman'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-center gap-1 font-mono tabular-nums text-lg sm:text-xl font-black text-white leading-none">
                   <span>{String(countdownParts.h).padStart(2, '0')}</span>
@@ -377,6 +441,44 @@ export const SalaadView: React.FC<SalaadViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* 1-Tap 'Waan Tukaday' Action Bar when a prayer is actively ongoing */}
+        {activeOrNext.isActive && activeOrNext.currentPrayer && (
+          <div className="p-2.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/25 flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-xs text-emerald-200/90 font-medium">
+              {dayData.salaah[activeOrNext.currentPrayer]?.status &&
+              dayData.salaah[activeOrNext.currentPrayer]?.status !== 'none'
+                ? `✓ Waxaad u diiwaangelisay: ${
+                    dayData.salaah[activeOrNext.currentPrayer]?.status === 'mosque'
+                      ? 'Masaajidka 🕌'
+                      : dayData.salaah[activeOrNext.currentPrayer]?.status === 'early_home'
+                      ? 'Waqtigeeda Hore 🌸'
+                      : 'Guriga 🏠'
+                  }`
+                : `Ma tukatay Salaadda ${activeOrNext.currentPrayerLabel}?`}
+            </span>
+
+            {dayData.salaah[activeOrNext.currentPrayer]?.status === 'none' ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdatePrayer(activeOrNext.currentPrayer!, {
+                    status: isSisterMode ? 'early_home' : 'mosque',
+                  })
+                }
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-black text-xs shadow-md hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>✓ Waan Tukaday</span>
+              </button>
+            ) : (
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold text-xs flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" />
+                <span>Alxamdulillah</span>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Bottom Row inside Hero: Today's Progress + Streak + Adhkaar Trigger */}
         <div className="pt-3 border-t border-teal-500/20 flex flex-wrap items-center justify-between gap-2 relative z-10">

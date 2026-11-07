@@ -1,4 +1,4 @@
-import { AppSettings, PrayerName } from '../types';
+import { AppSettings, CustomPrayerSchedule, PrayerName } from '../types';
 import { DEFAULT_USER_PRAYER_SCHEDULE } from './somaliaCities';
 
 export interface PrayerTimesResult {
@@ -225,6 +225,137 @@ export function getNextPrayerInfo(times: PrayerTimesResult, currentDate: Date): 
     minutesRemaining: minutesUntilMidnight + fajrMinutes,
     isPassed: true,
     timeString: formatTime12(times.Fajr),
+  };
+}
+
+export interface ActiveOrNextPrayerState {
+  isActive: boolean; // true if within active prayer window (Adhan -> allotted end)
+  currentPrayer: PrayerName | null; // active prayer name (e.g. Cishe)
+  currentPrayerLabel: string;
+  nextPrayer: PrayerName;
+  nextPrayerLabel: string;
+  nextPrayerTimeString: string;
+  activeAdhanTimeStr: string;
+  activeIqamaTimeStr: string;
+  isBeforeIqama: boolean;
+  secondsToIqama: number;
+  secondsToNextPrayer: number;
+  minutesRemaining: number;
+  timeString: string;
+  isPassed: boolean;
+}
+
+export function getActiveOrNextPrayerState(
+  times: PrayerTimesResult,
+  currentDate: Date = new Date(),
+  customSchedule?: CustomPrayerSchedule | Partial<Record<PrayerName, { adhan?: string; iqama?: string }>>
+): ActiveOrNextPrayerState {
+  const currentHour =
+    currentDate.getHours() + currentDate.getMinutes() / 60 + currentDate.getSeconds() / 3600;
+
+  // 1. Check if ANY prayer is currently within its active prayer window (Adhan -> allotted time)
+  for (let i = PRAYER_ORDER.length - 1; i >= 0; i--) {
+    const p = PRAYER_ORDER[i];
+    const pAdhan = times[p];
+    if (pAdhan == null || isNaN(pAdhan)) continue;
+
+    let pIqama = 0;
+    if (customSchedule && customSchedule[p] && customSchedule[p].iqama) {
+      pIqama = timeStringToDecimal(customSchedule[p].iqama);
+    } else {
+      const defaultOffset = p === 'Fajr' ? 25 : p === 'Maqrib' ? 12 : 20;
+      pIqama = pAdhan + defaultOffset / 60;
+    }
+
+    let pEnd = pAdhan + 45 / 60;
+    if (p === 'Fajr') {
+      pEnd = times.Sunrise ? Math.min(times.Sunrise, pAdhan + 50 / 60) : pAdhan + 50 / 60;
+    } else if (p === 'Maqrib') {
+      pEnd = times.Cishe ? Math.min(times.Cishe, pAdhan + 35 / 60) : pAdhan + 35 / 60;
+    } else if (p === 'Cishe') {
+      pEnd = Math.max(pIqama + 25 / 60, pAdhan + 50 / 60);
+    } else if (p === 'Duhur') {
+      pEnd = times.Casar ? Math.min(times.Casar, pAdhan + 45 / 60) : pAdhan + 45 / 60;
+    } else if (p === 'Casar') {
+      pEnd = times.Maqrib ? Math.min(times.Maqrib, pAdhan + 45 / 60) : pAdhan + 45 / 60;
+    }
+
+    if (currentHour >= pAdhan && currentHour < pEnd) {
+      const nextIdx = (i + 1) % PRAYER_ORDER.length;
+      const nextPrayer = PRAYER_ORDER[nextIdx];
+      const nextPrayerTime = times[nextPrayer];
+      const isNextTomorrow = nextIdx === 0;
+      let secsToNext = 0;
+      if (isNextTomorrow) {
+        secsToNext = Math.round((24 - currentHour + nextPrayerTime) * 3600);
+      } else {
+        secsToNext = Math.round((nextPrayerTime - currentHour) * 3600);
+      }
+
+      const isBeforeIqama = currentHour < pIqama;
+      const secondsToIqama = Math.max(0, Math.round((pIqama - currentHour) * 3600));
+
+      return {
+        isActive: true,
+        currentPrayer: p,
+        currentPrayerLabel: PRAYER_SOMALI_LABELS[p] || p,
+        nextPrayer,
+        nextPrayerLabel: PRAYER_SOMALI_LABELS[nextPrayer] || nextPrayer,
+        nextPrayerTimeString: formatTime12(nextPrayerTime),
+        activeAdhanTimeStr: formatTime12(pAdhan),
+        activeIqamaTimeStr: formatTime12(pIqama),
+        isBeforeIqama,
+        secondsToIqama,
+        secondsToNextPrayer: Math.max(0, secsToNext),
+        minutesRemaining: Math.max(0, Math.round(secsToNext / 60)),
+        timeString: formatTime12(nextPrayerTime),
+        isPassed: false,
+      };
+    }
+  }
+
+  // 2. If no prayer is currently in its active window, find the next upcoming prayer
+  for (let i = 0; i < PRAYER_ORDER.length; i++) {
+    const p = PRAYER_ORDER[i];
+    const pTime = times[p];
+    if (pTime > currentHour) {
+      const secsToNext = Math.max(0, Math.round((pTime - currentHour) * 3600));
+      return {
+        isActive: false,
+        currentPrayer: null,
+        currentPrayerLabel: '',
+        nextPrayer: p,
+        nextPrayerLabel: PRAYER_SOMALI_LABELS[p] || p,
+        nextPrayerTimeString: formatTime12(pTime),
+        activeAdhanTimeStr: '',
+        activeIqamaTimeStr: '',
+        isBeforeIqama: false,
+        secondsToIqama: 0,
+        secondsToNextPrayer: secsToNext,
+        minutesRemaining: Math.round(secsToNext / 60),
+        timeString: formatTime12(pTime),
+        isPassed: false,
+      };
+    }
+  }
+
+  // 3. All prayers today passed -> Tomorrow's Fajr
+  const secsToNext = Math.max(0, Math.round((24 - currentHour + times.Fajr) * 3600));
+  return {
+    isActive: false,
+    currentPrayer: null,
+    currentPrayerLabel: '',
+    nextPrayer: 'Fajr',
+    nextPrayerLabel: PRAYER_SOMALI_LABELS.Fajr,
+    nextPrayerTimeString: formatTime12(times.Fajr),
+    activeAdhanTimeStr: '',
+    activeIqamaTimeStr: '',
+    isBeforeIqama: false,
+    secondsToIqama: 0,
+    secondsToNextPrayer: secsToNext,
+    minutesRemaining: Math.round(secsToNext / 60),
+    timeString: formatTime12(times.Fajr),
+    isPassed: true,
   };
 }
 
