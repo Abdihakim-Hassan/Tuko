@@ -141,8 +141,8 @@ public class AdhanForegroundService extends Service {
                     itemId = itemType + "_" + title + "_" + time24;
                 }
 
-                // Check 1: Exact timestamp match (within 0 to 120 seconds window)
-                boolean timestampMatch = (timestamp > 0L && now >= timestamp && (now - timestamp) <= 120_000L);
+                // Check 1: Exact timestamp match (within 0 to 60 seconds window)
+                boolean timestampMatch = (timestamp > 0L && now >= timestamp && (now - timestamp) <= 60_000L);
 
                 // Check 2: HH:mm clock match ONLY for today's items (never tomorrow's _1 items)
                 boolean clockMatch = false;

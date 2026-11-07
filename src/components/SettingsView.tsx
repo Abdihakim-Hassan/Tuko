@@ -546,24 +546,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 })
               }
               className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition cursor-pointer ${
-                settings.useCustomSchedule !== false
+                settings.useCustomSchedule === true
                   ? 'bg-emerald-500 text-slate-950'
                   : 'bg-slate-800 text-slate-300 border border-white/10'
               }`}
             >
-              {settings.useCustomSchedule !== false ? '✓ Gaar ah' : 'Magaalada'}
+              {settings.useCustomSchedule === true ? '✓ Gaar ah' : 'Magaalada'}
             </button>
 
             <button
               type="button"
               onClick={() =>
                 onUpdateSettings({
-                  useCustomSchedule: true,
+                  useCustomSchedule: false,
                   customSchedule: DEFAULT_USER_PRAYER_SCHEDULE,
                 })
               }
               className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
-              title="Dib u celi"
+              title="Dib ugu celi waqtiga dhabta ah ee magaalada"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>

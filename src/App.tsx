@@ -181,7 +181,15 @@ export default function App() {
   const [showVideoTourModal, setShowVideoTourModal] = useState<boolean>(false);
   const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState<boolean>(false);
-  const [isStitchSampleMode, setIsStitchSampleMode] = useState<boolean>(false);
+  const [isStitchSampleMode, setIsStitchSampleMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1' || window.location.search.includes('stitch=1')) {
+        return true;
+      }
+    }
+    return false;
+  });
   const [quranReaderState, setQuranReaderState] = useState<{ isOpen: boolean; surahNumber: number }>({
     isOpen: false,
     surahNumber: 1,
@@ -334,7 +342,7 @@ export default function App() {
         const diffInMinutes = (currentDecimalHour - prayerDecimalHour) * 60;
         const schedMin = Math.round(prayerDecimalHour * 60);
         const notificationKey = `${todayKey}_${p}_${schedMin}`;
-        if (diffInMinutes > 5.0 && !notifiedPrayersRef.current[notificationKey]) {
+        if (diffInMinutes >= 0 && !notifiedPrayersRef.current[notificationKey]) {
           notifiedPrayersRef.current[notificationKey] = true;
           updatedPrayers = true;
         }
@@ -393,6 +401,12 @@ export default function App() {
           }
         }
       });
+
+      // Guard: If not an explicit targeted prayer, only play if actual prayer time is within 3.0 minutes!
+      if (!targetPrayer && minDiff > 3.0) {
+        console.debug('triggerIncomingAdhan skipped because prayer time is not right now (minDiff:', minDiff, ')');
+        return;
+      }
 
       const isFajr = matchedPrayer === 'Fajr';
       const prayerVoice = settings.prayerVoices?.[matchedPrayer] || settings.adhanVoice || 'makkah';
@@ -494,11 +508,21 @@ export default function App() {
           const remoteTs = Number(remoteSettings.updatedAt) || 0;
           const localTs = Number(prev.updatedAt) || 0;
           if (remoteTs >= localTs) {
+            const isRemoteDefaultSchedule =
+              !remoteSettings.customSchedule ||
+              (remoteSettings.customSchedule.Fajr?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan &&
+                remoteSettings.customSchedule.Duhur?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan &&
+                remoteSettings.customSchedule.Casar?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan &&
+                remoteSettings.customSchedule.Maqrib?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan &&
+                remoteSettings.customSchedule.Cishe?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan);
+            const resolvedUseCustom =
+              remoteSettings.useCustomSchedule === true && !isRemoteDefaultSchedule;
+
             const nextSettings: AppSettings = {
               ...DEFAULT_SETTINGS,
               ...prev,
               ...remoteSettings,
-              useCustomSchedule: true,
+              useCustomSchedule: resolvedUseCustom,
               customSchedule: {
                 ...DEFAULT_USER_PRAYER_SCHEDULE,
                 ...(prev.customSchedule || {}),
@@ -677,11 +701,21 @@ export default function App() {
           const cloudTs = parseTs((cloudSettings as any)?.updatedAtMs || cloudSettings.updatedAt);
           const localTs = parseTs(prev.updatedAt);
           if (cloudTs >= localTs) {
+            const isCloudDefaultSchedule =
+              !cloudSettings.customSchedule ||
+              (cloudSettings.customSchedule.Fajr?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan &&
+                cloudSettings.customSchedule.Duhur?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan &&
+                cloudSettings.customSchedule.Casar?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan &&
+                cloudSettings.customSchedule.Maqrib?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan &&
+                cloudSettings.customSchedule.Cishe?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan);
+            const resolvedUseCustom =
+              cloudSettings.useCustomSchedule === true && !isCloudDefaultSchedule;
+
             const merged: AppSettings = {
               ...DEFAULT_SETTINGS,
               ...prev,
               ...cloudSettings,
-              useCustomSchedule: true,
+              useCustomSchedule: resolvedUseCustom,
               customSchedule: {
                 ...DEFAULT_USER_PRAYER_SCHEDULE,
                 ...(prev.customSchedule || {}),
@@ -887,6 +921,15 @@ export default function App() {
           const cloudTs =
             Number((cloudSettings as any)?.updatedAtMs || cloudSettings.updatedAt) ||
             Date.now();
+          const isCloudDefault =
+            !cloudSettings.customSchedule ||
+            (cloudSettings.customSchedule.Fajr?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan &&
+              cloudSettings.customSchedule.Duhur?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan &&
+              cloudSettings.customSchedule.Casar?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan &&
+              cloudSettings.customSchedule.Maqrib?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan &&
+              cloudSettings.customSchedule.Cishe?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan);
+          const resolvedUseCustom = cloudSettings.useCustomSchedule === true && !isCloudDefault;
+
           const mergedSettings: AppSettings = {
             ...DEFAULT_SETTINGS,
             ...localSettings,
@@ -900,7 +943,7 @@ export default function App() {
               cloudSettings.startingStreakOffset ??
               localSettings.startingStreakOffset ??
               0,
-            useCustomSchedule: true,
+            useCustomSchedule: resolvedUseCustom,
             customSchedule: {
               ...DEFAULT_USER_PRAYER_SCHEDULE,
               ...(localSettings.customSchedule || {}),
@@ -919,13 +962,22 @@ export default function App() {
             localStorage.setItem(`tuko_gender_confirmed_${user.uid}`, resolvedGender);
           }
         } else {
+          const isLocalDefault =
+            !localSettings.customSchedule ||
+            (localSettings.customSchedule.Fajr?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan &&
+              localSettings.customSchedule.Duhur?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan &&
+              localSettings.customSchedule.Casar?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan &&
+              localSettings.customSchedule.Maqrib?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan &&
+              localSettings.customSchedule.Cishe?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan);
+          const resolvedLocalUseCustom = localSettings.useCustomSchedule === true && !isLocalDefault;
+
           const freshUserSettings: AppSettings = {
             ...DEFAULT_SETTINGS,
             ...localSettings,
             gender: resolvedGender || 'male',
             genderConfirmed: !!resolvedGender || !!localSettings.genderConfirmed,
             startingStreakOffset: localSettings.startingStreakOffset ?? 0,
-            useCustomSchedule: true,
+            useCustomSchedule: resolvedLocalUseCustom,
             customSchedule: {
               ...DEFAULT_USER_PRAYER_SCHEDULE,
               ...(localSettings.customSchedule || {}),
@@ -1098,15 +1150,18 @@ export default function App() {
                 const voice = settings.prayerVoices?.[p] || settings.adhanVoice || (p === 'Fajr' ? 'fajr' : 'makkah');
                 const time24 = `${pad2(h)}:${pad2(m)}`;
 
-                scheduleToSync.push({
-                  id: `prayer_${p}_${dayOffset}`,
-                  prayer: p,
-                  timestamp: dt.getTime(),
-                  time24,
-                  voice,
-                  soundType: 'adhan',
-                  type: 'adhan',
-                });
+                // Only sync upcoming prayers (at least 5s in the future) so past prayers are never scheduled
+                if (dt.getTime() > now.getTime() + 5000) {
+                  scheduleToSync.push({
+                    id: `prayer_${p}_${dayOffset}`,
+                    prayer: p,
+                    timestamp: dt.getTime(),
+                    time24,
+                    voice,
+                    soundType: 'adhan',
+                    type: 'adhan',
+                  });
+                }
               }
             });
           });
@@ -1125,16 +1180,18 @@ export default function App() {
             const dow = dt.getDay();
             if (Array.isArray(alarm.days) && alarm.days.length > 0 && !alarm.days.includes(dow)) return;
 
-            scheduleToSync.push({
-              id: `alarm_${alarm.id}_${dayOffset}`,
-              prayer: alarm.label || 'Alaarm',
-              timestamp: dt.getTime(),
-              time24,
-              voice: alarm.selectedVoice || settings.adhanVoice || 'makkah',
-              soundType: alarm.sound || 'adhan',
-              type: 'alarm',
-              days: Array.isArray(alarm.days) ? alarm.days : [],
-            });
+            if (dt.getTime() > now.getTime() + 5000) {
+              scheduleToSync.push({
+                id: `alarm_${alarm.id}_${dayOffset}`,
+                prayer: alarm.label || 'Alaarm',
+                timestamp: dt.getTime(),
+                time24,
+                voice: alarm.selectedVoice || settings.adhanVoice || 'makkah',
+                soundType: alarm.sound || 'adhan',
+                type: 'alarm',
+                days: Array.isArray(alarm.days) ? alarm.days : [],
+              });
+            }
           });
         });
 
@@ -1331,35 +1388,38 @@ export default function App() {
             setTimeout(() => setSnoozeMessage(null), 6000);
           }
 
-          // Real-time prayer Adhan alert: trigger immediately when prayer time arrives!
-          if (diffInMinutes >= 0 && diffInMinutes < 5.0 && !notifiedPrayersRef.current[notificationKey]) {
+          // Real-time prayer Adhan alert: trigger ONLY within the first 60 seconds (1 minute) when prayer time arrives!
+          if (diffInMinutes >= 0 && !notifiedPrayersRef.current[notificationKey]) {
             notifiedPrayersRef.current[notificationKey] = true;
             try {
               localStorage.setItem(`tuko_notified_prayers_${todayKey}`, JSON.stringify(notifiedPrayersRef.current));
             } catch {}
 
-            if (audioAlerts.isMinuteSilenced(pTime24)) {
-              return;
-            }
+            // Only trigger audio, takeover overlay & notification if we are within the first 60 seconds!
+            if (diffInMinutes < 1.0) {
+              if (audioAlerts.isMinuteSilenced(pTime24)) {
+                return;
+              }
 
-            // 1. Play authentic Adhan sound for this prayer's chosen voice (enabled by default)
-            if (ambientSounds.getState().isAnyPlaying) {
-              ambientSounds.pauseOrResumeAll();
-            }
-            if (settings.adhanSound !== false) {
-              const prayerVoice = settings.prayerVoices?.[p] || settings.adhanVoice || 'makkah';
-              audioAlerts.playAdhan(p === 'Fajr', undefined, prayerVoice);
-            }
+              // 1. Play authentic Adhan sound for this prayer's chosen voice (enabled by default)
+              if (ambientSounds.getState().isAnyPlaying) {
+                ambientSounds.pauseOrResumeAll();
+              }
+              if (settings.adhanSound !== false) {
+                const prayerVoice = settings.prayerVoices?.[p] || settings.adhanVoice || 'makkah';
+                audioAlerts.playAdhan(p === 'Fajr', undefined, prayerVoice);
+              }
 
-            // 2. Dispatch system notification to device
-            const somaliPrayerName = PRAYER_SOMALI_LABELS[p];
-            sendBrowserNotification(
-              'Tuko',
-              `🕌 Aadaanka ${somaliPrayerName} Wuu Galay!\nWaa waqtigii salaadda ${somaliPrayerName}. Kac oo dhowr salaaddaada oo u diyaar garow cibaadada.`
-            );
+              // 2. Dispatch system notification to device
+              const somaliPrayerName = PRAYER_SOMALI_LABELS[p];
+              sendBrowserNotification(
+                'Tuko',
+                `🕌 Aadaanka ${somaliPrayerName} Wuu Galay!\nWaa waqtigii salaadda ${somaliPrayerName}. Kac oo dhowr salaaddaada oo u diyaar garow cibaadada.`
+              );
 
-            // 3. Open takeover overlay (Post-Prayer Dhikr & Adhan Screen)
-            setActiveAdhaanOverlayPrayer(p);
+              // 3. Open takeover overlay (Post-Prayer Dhikr & Adhan Screen)
+              setActiveAdhaanOverlayPrayer(p);
+            }
           }
         }
       });

@@ -1,6 +1,6 @@
 import { AppSettings, CustomDua, DayData, PrayerName, SalaahStatus, TodoItem } from '../types';
 import { INITIAL_CUSTOM_DUAS } from './defaultAdhkar';
-import { DEFAULT_SETTINGS } from './somaliaCities';
+import { DEFAULT_SETTINGS, DEFAULT_USER_PRAYER_SCHEDULE } from './somaliaCities';
 import { getTodayKey } from './prayerTimes';
 
 const STORAGE_DAYS_KEY = 'salaad_soomaali_days_v3';
@@ -255,7 +255,7 @@ export function applyUserRequestedQuranConfig(
 export function loadSettings(explicitUid?: string): AppSettings {
   try {
     const raw = localStorage.getItem(getScopedKey(STORAGE_SETTINGS_KEY, explicitUid));
-    if (!raw) return { ...DEFAULT_SETTINGS, startingStreakOffset: 0 };
+    if (!raw) return { ...DEFAULT_SETTINGS, startingStreakOffset: 0, useCustomSchedule: false };
     const parsed = JSON.parse(raw);
 
     const mergedSchedule = {
@@ -263,15 +263,27 @@ export function loadSettings(explicitUid?: string): AppSettings {
       ...(parsed.customSchedule || {}),
     };
 
+    // If customSchedule is untouched from the static default template,
+    // do not force custom schedule so the user gets accurate astronomical times for their selected city!
+    const isScheduleDefault =
+      !parsed.customSchedule ||
+      (parsed.customSchedule.Fajr?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Fajr.adhan &&
+        parsed.customSchedule.Duhur?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Duhur.adhan &&
+        parsed.customSchedule.Casar?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Casar.adhan &&
+        parsed.customSchedule.Maqrib?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Maqrib.adhan &&
+        parsed.customSchedule.Cishe?.adhan === DEFAULT_USER_PRAYER_SCHEDULE.Cishe.adhan);
+
+    const effectiveUseCustom = Boolean(parsed.useCustomSchedule === true && !isScheduleDefault);
+
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
       startingStreakOffset: parsed.startingStreakOffset ?? 0,
-      useCustomSchedule: true,
+      useCustomSchedule: effectiveUseCustom,
       customSchedule: mergedSchedule,
     };
   } catch {
-    return { ...DEFAULT_SETTINGS, startingStreakOffset: 0 };
+    return { ...DEFAULT_SETTINGS, startingStreakOffset: 0, useCustomSchedule: false };
   }
 }
 

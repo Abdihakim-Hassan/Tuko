@@ -148,8 +148,8 @@ public class TukoNativeBridge {
                 String itemType = item.optString("type", "adhan");
                 String time24 = item.optString("time24", "");
 
-                if (timestamp > (now - 15_000L)) {
-                    long triggerAt = Math.max(now + 1000L, timestamp);
+                if (timestamp > now) {
+                    long triggerAt = timestamp;
 
                     Intent intent = new Intent(context, AdhanAlarmReceiver.class);
                     intent.setAction(AdhanAlarmReceiver.ACTION_PLAY_ADHAN);
