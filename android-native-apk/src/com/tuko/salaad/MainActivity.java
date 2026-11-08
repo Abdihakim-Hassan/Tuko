@@ -2,6 +2,7 @@ package com.tuko.salaad;
 
 import android.app.Activity;
 import android.app.Dialog;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -187,7 +188,19 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Start 24/7 Native Foreground Service immediately so Adhan & Alarm work when exiting the app
+        // Cancel any lingering legacy persistent/silent notifications and delete guard channel
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.cancel(2002);
+                if (Build.VERSION.SDK_INT >= 26) {
+                    nm.deleteNotificationChannel("tuko_247_guard_channel");
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Start 24/7 Native Foreground Service safely so Adhan & Alarm work when exiting the app
         AdhanForegroundService.startServiceSafely(this);
 
         // Configure dark status bar & navigation bar matching Tuko theme (#041014)
@@ -393,6 +406,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.cancel(2002);
+                if (Build.VERSION.SDK_INT >= 26) {
+                    nm.deleteNotificationChannel("tuko_247_guard_channel");
+                }
+            }
+        } catch (Exception ignored) {
+        }
         if (webView != null) {
             webView.resumeTimers();
             try {

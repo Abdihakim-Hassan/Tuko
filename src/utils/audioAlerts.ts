@@ -12,7 +12,7 @@ class AudioManager {
   private persistentAudio: HTMLAudioElement | null = null;
   private keepAliveAudio: HTMLAudioElement | null = null;
   private htmlAudioBlessed = false;
-  private keepAliveEnabled = true;
+  private keepAliveEnabled = false;
   private volumeLevel = 1.0;
   private preloaded = false;
   private unlocked = false;
@@ -378,22 +378,15 @@ class AudioManager {
   private startKeepAliveLoop(): void {
     if (typeof window === 'undefined') return;
     try {
-      if (!this.keepAliveAudio) {
-        this.keepAliveAudio = new Audio(SILENT_WAV_DATA_URI);
-        this.keepAliveAudio.loop = true;
-        this.keepAliveAudio.volume = 0.0001;
-        (this.keepAliveAudio as unknown as { playsInline?: boolean }).playsInline = true;
-      }
-      if (this.keepAliveAudio.paused) {
-        this.keepAliveAudio.play().catch(() => {});
+      if (this.keepAliveAudio) {
+        this.keepAliveAudio.pause();
+        this.keepAliveAudio.src = '';
+        this.keepAliveAudio = null;
       }
       if ('mediaSession' in navigator && !this.isCurrentlyPlaying) {
         try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: 'Heeganka Aadaanka (24/7)',
-            artist: 'Tuko • Salaad & Adhkaar',
-            album: 'Waqtiyada Salaadda',
-          });
+          navigator.mediaSession.metadata = null;
+          navigator.mediaSession.playbackState = 'none';
         } catch {}
       }
     } catch {}
@@ -519,7 +512,20 @@ class AudioManager {
         audio.onended = () => {
           this.isCurrentlyPlaying = false;
           this.isStartingPlay = false;
-          this.releaseWakeLock();
+          if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch {}
+    }
+    if (this.keepAliveAudio) {
+      try {
+        this.keepAliveAudio.pause();
+        this.keepAliveAudio.src = '';
+        this.keepAliveAudio = null;
+      } catch {}
+    }
+    this.releaseWakeLock();
           onEnded();
         };
       }
@@ -555,7 +561,20 @@ class AudioManager {
       audio.onended = () => {
         this.isCurrentlyPlaying = false;
         this.isStartingPlay = false;
-        this.releaseWakeLock();
+        if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch {}
+    }
+    if (this.keepAliveAudio) {
+      try {
+        this.keepAliveAudio.pause();
+        this.keepAliveAudio.src = '';
+        this.keepAliveAudio = null;
+      } catch {}
+    }
+    this.releaseWakeLock();
         if (onEnded) onEnded();
       };
 
@@ -931,6 +950,19 @@ class AudioManager {
       audio.loop = false;
     }
     this.stopAdhan();
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch {}
+    }
+    if (this.keepAliveAudio) {
+      try {
+        this.keepAliveAudio.pause();
+        this.keepAliveAudio.src = '';
+        this.keepAliveAudio = null;
+      } catch {}
+    }
     this.releaseWakeLock();
   }
 
@@ -965,6 +997,19 @@ class AudioManager {
         a.loop = false;
       } catch {}
     });
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch {}
+    }
+    if (this.keepAliveAudio) {
+      try {
+        this.keepAliveAudio.pause();
+        this.keepAliveAudio.src = '';
+        this.keepAliveAudio = null;
+      } catch {}
+    }
     this.releaseWakeLock();
   }
 

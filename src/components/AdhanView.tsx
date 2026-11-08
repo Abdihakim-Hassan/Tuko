@@ -832,27 +832,26 @@ export const AdhanView: React.FC<AdhanViewProps> = ({
               type="button"
               onClick={async () => {
                 audioAlerts.unlockAudio();
-                audioAlerts.setKeepAliveEnabled(true);
                 await audioAlerts.requestWakeLock();
                 await requestNotificationPermission();
                 setIsBgKeepAliveOn(true);
                 setSaveSuccessMsg(
-                  '⚡ Heeganka Aadaanka (24/7 Background Mode) waa la shiday! Xitaa haddii shaashaddu xirantahay Aadaanku si toos ah ayuu u yeerayaa.'
+                  '⚡ Ogeysiisyada Aadaanka waa la furay! Aadaanku waqtigiisa ayuu u dhacayaa bilaa ogeysiis joogto ah.'
                 );
                 setTimeout(() => setSaveSuccessMsg(null), 4000);
               }}
               className={`px-2.5 py-1 rounded-xl font-bold text-[11px] flex items-center gap-1 transition cursor-pointer active:scale-95 ${
                 isBgKeepAliveOn && isNotificationGranted()
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
-                  : 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/40 animate-pulse'
+                  : 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/40'
               }`}
-              title="Shid Heeganka Aadaanka 24/7 si uu u dhaco xitaa marka shaashaddu dansan tahay"
+              title="Shid ogeysiisyada Aadaanka"
             >
               <Zap className="w-3 h-3 fill-current" />
               <span>
                 {isBgKeepAliveOn && isNotificationGranted()
-                  ? 'Heeganka 24/7 Waa Furan ✓'
-                  : 'Shid Heeganka Aadaanka ⚡'}
+                  ? 'Ogeysiiska Waa Furan ✓'
+                  : 'Shid Ogeysiiska Aadaanka ⚡'}
               </span>
             </button>
 

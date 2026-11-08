@@ -1,11 +1,11 @@
 {
-  "version": "3.0.2",
-  "build": 81,
-  "releaseDate": "2026-11-07",
+  "version": "3.0.3",
+  "build": 82,
+  "releaseDate": "2026-11-08",
   "minSupportedVersion": "2.0.0",
-  "title": "Tuko Salaad & Adhkaar v3.0.2",
+  "title": "Tuko Salaad & Adhkaar v3.0.3",
   "changelog": [
-    "Shaashadda Salaadda Hadda Lagu Jiraa (Active Prayer): Marka aadaanku dhaco, shaashaddu waxay si toos ah u haysanaysaa salaadda hadda lagu jiro (sida Cisha) ilaa inta waqtiga salaadda iyo aqinku ka dhamaanayaan, halkii ay markiiba ugu boodi lahayd Subax.",
-    "Tirinta Ka Dhiman Aqinka (Iqama Countdown): Waxaa la arkayaa waqtiga ka dhiman aqinka iyo batoonka degdegga ah ee '✓ Waan Tukaday'."
+    "Ogeysiiska Joogtada ah ('Heeganka Aadaanka & Alaarmka 24/7'): Si buuxda ayaa loo damiyay loona tiray si uusan mar dambe shaashadda taleefankaaga ama notification bar-ka ugu soo dhicin.",
+    "Aadaanka & Alaarmka: Waxay ku dhacayaan waqtigooda saxda ah iyadoo shaashaddaadu nadiif tahay oo aysan wax ogeysiis joogto ah kaaga muuqanayn."
   ]
 }
