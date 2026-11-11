@@ -15,7 +15,7 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-// Register PWA Service Worker for Android/iOS/Desktop installability and clean up stale caches
+// Register PWA Service Worker for Android/iOS/Desktop installability and auto-update
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   const registerPwaServiceWorker = () => {
     navigator.serviceWorker
@@ -24,19 +24,6 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         reg.update().catch(() => {});
       })
       .catch(() => {});
-
-    if ('caches' in window) {
-      caches
-        .keys()
-        .then((keys) => {
-          keys.forEach((key) => {
-            if (key !== 'tuko-pwa-v62') {
-              caches.delete(key).catch(() => {});
-            }
-          });
-        })
-        .catch(() => {});
-    }
   };
 
   if (document.readyState === 'complete') {

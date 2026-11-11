@@ -5,7 +5,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { Volume2 } from 'lucide-react';
+import { Volume2, Sparkles, X } from 'lucide-react';
+import { checkForAppUpdate, applyAppUpdate, AppUpdateCheckResult } from './utils/appUpdateService';
 import { Header } from './components/Header';
 import { TukoLogo, TukoReloadOverlay } from './components/TukoLogo';
 import { SalaadView } from './components/SalaadView';
@@ -149,6 +150,31 @@ export default function App() {
   }, [triggerReloadVisual]);
 
   const [newDayAlert, setNewDayAlert] = useState<string | null>(null);
+  const [pendingAppUpdate, setPendingAppUpdate] = useState<AppUpdateCheckResult | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateCheckTimer = setTimeout(async () => {
+      try {
+        const res = await checkForAppUpdate();
+        if (res.isUpdateAvailable) {
+          setPendingAppUpdate(res);
+        }
+      } catch {}
+    }, 2000);
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg?.waiting) {
+          checkForAppUpdate().then((res) => {
+            if (res.isUpdateAvailable) setPendingAppUpdate(res);
+          }).catch(() => {});
+        }
+      });
+    }
+
+    return () => clearTimeout(updateCheckTimer);
+  }, []);
   const [accountActionAlert, setAccountActionAlert] = useState<{
     message: string;
     type: 'success' | 'logout';
@@ -2328,6 +2354,44 @@ export default function App() {
 
       {/* Offline Mode & Network Connection Status Banner */}
       <OfflineBanner />
+
+      {/* Floating App Update Banner (Appears when new build/features are deployed) */}
+      {pendingAppUpdate && (
+        <div className="mx-auto max-w-4xl px-3 sm:px-4 pt-2">
+          <div className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-lg border border-teal-300/30 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 shrink-0 animate-pulse" />
+              <div className="min-w-0">
+                <span className="text-xs sm:text-sm font-black block truncate">
+                  Cusboonaysiin cusub baa diyaar ah (v{pendingAppUpdate.latestVersion || '3.0.3'})!
+                </span>
+                <span className="text-[10px] text-teal-100 hidden sm:inline">
+                  Taabo badhanka si aad isla markiiba u hesho dhammaan isbeddellada cusub.
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => applyAppUpdate()}
+                className="px-3 py-1.5 rounded-xl bg-white text-teal-950 font-black text-xs hover:bg-slate-100 transition shadow active:scale-95 cursor-pointer flex items-center gap-1"
+              >
+                <span>Cusboonaysii Hadda</span>
+                <span>⚡</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingAppUpdate(null)}
+                className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer"
+                aria-label="Xir"
+                title="Xir"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full Interactive Stitch Sample Preview Mode (when active, replaces view safely) */}
       {isStitchSampleMode && (
