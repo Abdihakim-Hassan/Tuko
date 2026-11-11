@@ -1,12 +1,12 @@
 {
-  "version": "3.0.4",
-  "build": 83,
+  "version": "3.0.5",
+  "build": 84,
   "releaseDate": "2026-11-11",
   "minSupportedVersion": "2.0.0",
-  "title": "Tuko Salaad & Adhkaar v3.0.4",
+  "title": "Tuko Salaad & Adhkaar v3.0.5",
   "changelog": [
-    "Toos u Cusboonaysiinta (Live Update): Waxaa lagu daray ogeysiis degdeg ah oo shaashadda dusha sare ka soo muuqanaya marka update cusub la soo saaro si hal taabasho loogu helo isbeddellada ugu dambeeyay.",
-    "Ogeysiiska Joogtada ah ('Heeganka Aadaanka 24/7'): Si buuxda ayaa loo xiray si uusan taleefankaaga mar dambe ugu soo dhicin.",
-    "Waqtiyada Salaadda & Aqinka: Waxaa lagu xisaabiyaa si toos ah magaalada aad ku sugan tahay iyadoo kaarka salaadda hadda lagu jiro uu muuqanayo inta lagu guda jiro waqtiga salaadda."
+    "Xallinta Shaashadda Dhegganayd ('Waa la soo cusboonaysiinayaa...'): Gebi ahaanba waa la furay oo la xalliyay si toos ahna app-ku wuxuu ku furmayaa bilaa hakasho.",
+    "Toos u Cusboonaysiinta (Live Update): Waxaa lagu daray ogeysiis degdeg ah oo shaashadda dusha sare ka soo muuqanaya marka update cusub la soo saaro.",
+    "Waqtiyada Salaadda & Aadaanka: Waxay ku xisaabsan yihiin degmada aad joogto."
   ]
 }

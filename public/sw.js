@@ -1,5 +1,5 @@
-// Tuko Service Worker v83 — 100% Full Offline Mode Across All 12 Sections & All 114 Surahs
-const CACHE_NAME = 'tuko-pwa-v83';
+// Tuko Service Worker v84 — 100% Full Offline Mode Across All 12 Sections & All 114 Surahs
+const CACHE_NAME = 'tuko-pwa-v84';
 const QURAN_DATA_CACHE = 'tuko-quran-data-v1';
 const QURAN_AUDIO_CACHE = 'tuko-audio-cache-v2';
 

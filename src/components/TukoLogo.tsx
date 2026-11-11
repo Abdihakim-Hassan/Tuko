@@ -135,17 +135,36 @@ export const TukoLogo: React.FC<TukoLogoProps> = ({
 
 interface TukoReloadOverlayProps {
   phase: 'spinning' | 'finishing' | 'hidden';
+  onDismiss?: () => void;
 }
 
-export const TukoReloadOverlay: React.FC<TukoReloadOverlayProps> = ({ phase }) => {
-  if (phase === 'hidden') return null;
+export const TukoReloadOverlay: React.FC<TukoReloadOverlayProps> = ({ phase, onDismiss }) => {
+  const [forceHide, setForceHide] = React.useState(false);
+
+  React.useEffect(() => {
+    if (phase !== 'hidden') {
+      const timer = setTimeout(() => {
+        setForceHide(true);
+        if (onDismiss) onDismiss();
+      }, 850);
+      return () => clearTimeout(timer);
+    } else {
+      setForceHide(false);
+    }
+  }, [phase, onDismiss]);
+
+  if (phase === 'hidden' || forceHide) return null;
 
   const isFinishing = phase === 'finishing';
 
   return (
     <div
       aria-live="polite"
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#03221e]/95 backdrop-blur-md transition-all duration-300 select-none ${
+      onClick={() => {
+        setForceHide(true);
+        if (onDismiss) onDismiss();
+      }}
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#03221e]/95 backdrop-blur-md transition-all duration-300 select-none cursor-pointer ${
         isFinishing ? 'opacity-0 scale-105 pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >

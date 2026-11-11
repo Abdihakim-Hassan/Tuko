@@ -118,7 +118,7 @@ export default function App() {
   const [todos, setTodos] = useState<TodoItem[]>(() => loadAllTodos());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('connected');
-  const [reloadPhase, setReloadPhase] = useState<'spinning' | 'finishing' | 'hidden'>('spinning');
+  const [reloadPhase, setReloadPhase] = useState<'spinning' | 'finishing' | 'hidden'>('hidden');
   const reloadTimersRef = useRef<{ finish?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>({});
 
   const triggerReloadVisual = useCallback(() => {
@@ -127,14 +127,13 @@ export default function App() {
     setReloadPhase('spinning');
     reloadTimersRef.current.finish = setTimeout(() => {
       setReloadPhase('finishing');
-    }, 520);
+    }, 400);
     reloadTimersRef.current.hide = setTimeout(() => {
       setReloadPhase('hidden');
-    }, 800);
+    }, 650);
   }, []);
 
   useEffect(() => {
-    triggerReloadVisual();
     // Background pre-cache all 114 Surahs & Adhan voices so the entire app works 100% offline
     const offlineTimer = setTimeout(() => {
       ensureAll114SurahsCachedOffline().catch(() => {});
@@ -147,7 +146,7 @@ export default function App() {
       if (reloadTimersRef.current.finish) clearTimeout(reloadTimersRef.current.finish);
       if (reloadTimersRef.current.hide) clearTimeout(reloadTimersRef.current.hide);
     };
-  }, [triggerReloadVisual]);
+  }, []);
 
   const [newDayAlert, setNewDayAlert] = useState<string | null>(null);
   const [pendingAppUpdate, setPendingAppUpdate] = useState<AppUpdateCheckResult | null>(null);
@@ -2302,7 +2301,7 @@ export default function App() {
       <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Spinning Tuko Logo Reload & Completion Overlay */}
-      <TukoReloadOverlay phase={reloadPhase} />
+      <TukoReloadOverlay phase={reloadPhase} onDismiss={() => setReloadPhase('hidden')} />
 
       {/* Top Header & Nav */}
       <Header
